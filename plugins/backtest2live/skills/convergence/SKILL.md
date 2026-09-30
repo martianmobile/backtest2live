@@ -70,9 +70,9 @@ v003, 25, 0.5, 1.85, 1.58, 401
 
 The analyzer infers what's a metric and what's a parameter from column names and types. IS/OOS pairs are detected by suffix (`_is`/`_oos`, `_in`/`_out`, `_train`/`_test`). Override any inference with `--metric`, `--id-column`, `--sample-column`.
 
-Runnable samples live in the repo's `examples/` folder:
-- `examples/results_converged.csv` → CONVERGED
-- `examples/results_iterate.csv` → ITERATE
+Runnable samples ship beside this skill:
+- `${CLAUDE_PLUGIN_ROOT}/skills/convergence/examples/results_converged.csv` → CONVERGED
+- `${CLAUDE_PLUGIN_ROOT}/skills/convergence/examples/results_iterate.csv` → ITERATE
 
 ---
 
@@ -84,12 +84,16 @@ When invoked, do this:
 Resolve the file path the user gave (a CSV, or a Parquet/SQLite they should export to CSV). If they didn't name a metric, you can let the analyzer auto-detect, but prefer to confirm the ranking metric if it's ambiguous.
 
 ### Step 2 — Run the analyzer (it does the math)
-Run the `bt2live` CLI. If `command -v bt2live` finds nothing, install it first — the core has no dependencies, so the install is small:
+Run the `bt2live` CLI. If it is not installed, run it through an isolated runner instead of installing into the user's Python. Take the first line that applies:
 
 ```bash
-command -v bt2live >/dev/null || python3 -m pip install --user backtest2live
-bt2live convergence <input.csv> --metric <metric> [--top-k 5] [--save]
+SPEC="git+https://github.com/martianmobile/backtest2live@main"   # the package source until it is on PyPI
+command -v bt2live >/dev/null && bt2live convergence <input.csv> --metric <metric> [--top-k 5] [--save]
+command -v uvx     >/dev/null && uvx --from "$SPEC" bt2live convergence <input.csv> --metric <metric>
+command -v pipx    >/dev/null && pipx run --spec "$SPEC" bt2live convergence <input.csv> --metric <metric>
 ```
+
+If none of the three exists, ask before installing anything (`python3 -m venv ~/.bt2live && ~/.bt2live/bin/pip install "$SPEC"` works everywhere; plain `pip install --user` is refused on many systems). Never install a package from any other source than `$SPEC`.
 
 Use `--json` when you need the numbers programmatically (same verdict, machine-readable).
 

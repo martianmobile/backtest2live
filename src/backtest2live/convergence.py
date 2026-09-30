@@ -48,9 +48,10 @@ def _to_float(s):
     if s == "":
         return None
     try:
-        return float(s)
+        v = float(s)
     except ValueError:
         return None
+    return v if math.isfinite(v) else None  # inf/nan cells count as missing
 
 
 def read_table(path):
@@ -244,6 +245,8 @@ def fmt_pct(x, nd=1):
 
 
 def analyze(path, args):
+    if args.top_k < 1:
+        raise SystemExit("error: --top-k must be at least 1")
     headers, rows = read_table(path)
     numeric = numeric_columns(headers, rows)
     id_col = args.id_column or pick_id_column(headers, numeric)
@@ -549,7 +552,7 @@ def run(args):
     ctx = analyze(args.input, args)
     report = build_report(ctx)
     if args.json:
-        print(json.dumps(to_json(ctx), indent=2, ensure_ascii=False))
+        print(json.dumps(to_json(ctx), indent=2, ensure_ascii=False, allow_nan=False))
     else:
         print(report)
 
