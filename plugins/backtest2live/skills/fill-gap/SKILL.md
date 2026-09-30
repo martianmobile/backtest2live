@@ -18,16 +18,18 @@ One CSV row per order. Required: time (`ts`, epoch or ISO, UTC), `side` (buy/sel
 
 ## Step 3 — Run
 
-Run the `bt2live` CLI if it is installed; otherwise use an isolated runner from the pinned source. Take the first line that applies:
+Run the `bt2live` CLI if it is installed; otherwise use an isolated runner from the pinned source. `fill-gap` needs the `[data]` extra (numpy, pandas), so the spec carries it in PEP 508 form:
 
 ```bash
-SPEC="git+https://github.com/martianmobile/backtest2live@main"   # the package source until it is on PyPI
-command -v bt2live >/dev/null && bt2live fill-gap <orders.csv> --venue binance-um --pair BTCUSDT [--latency-ms 20] [--json]
-command -v uvx     >/dev/null && uvx --from "${SPEC}#egg=backtest2live[data]" bt2live fill-gap <orders.csv> ...
-command -v pipx    >/dev/null && pipx run --spec "${SPEC}#egg=backtest2live[data]" bt2live fill-gap <orders.csv> ...
+DATA="backtest2live[data] @ git+https://github.com/martianmobile/backtest2live@main"   # until it is on PyPI
+ARGS=(fill-gap <orders.csv> --venue binance-um --pair BTCUSDT)   # plus [--latency-ms 20] [--json]
+if   command -v bt2live >/dev/null; then bt2live "${ARGS[@]}"
+elif command -v uvx     >/dev/null; then uvx --from "$DATA" bt2live "${ARGS[@]}"
+elif command -v pipx    >/dev/null; then pipx run --spec "$DATA" bt2live "${ARGS[@]}"
+else echo "no runner: ask before installing"; fi
 ```
 
-`fill-gap` needs the `[data]` extra (numpy, pandas). If none of the three runners exists, ask before installing anything; `python3 -m venv ~/.bt2live && ~/.bt2live/bin/pip install "${SPEC}#egg=backtest2live[data]"` works everywhere. Never install from any other source than `$SPEC`.
+If none of the three runners exists, ask before installing anything; `python3 -m venv ~/.bt2live && ~/.bt2live/bin/pip install "$DATA"` works everywhere. Never install from any other source than `$DATA`.
 
 Exit code: `0` CONSISTENT, `1` OVERSTATED, `3` error.
 
