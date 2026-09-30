@@ -19,8 +19,13 @@ def _run_chunk(book, trades, orders, idx, tick, latency_us):
          "bid_qty": book["bid_qty"], "ask_qty": book["ask_qty"]}
     tr = {"t": trades["t"], "px": _ticks(trades["px"], tick), "qty": trades["qty"],
           "sell_aggr": trades["sell_aggr"]}
+    px = orders["px_f"][idx] / tick
+    off = np.abs(px - np.rint(px)) > 1e-6
+    if off.any():
+        raise SystemExit(f"error: {int(off.sum())} order price(s) are not on the {tick:g} tick grid "
+                         f"(first: {orders['px_f'][idx][off][0]:g}); pass --tick or fix the log")
     o = {"t": orders["t"][idx], "t_end": orders["t_end"][idx], "buy": orders["buy"][idx],
-         "px": _ticks(orders["px_f"][idx], tick), "size": orders["size"][idx]}
+         "px": np.rint(px).astype(np.int64), "size": orders["size"][idx]}
     r = sim.simulate(b, tr, o, latency_us)
     r["range_bps"] = sim.trailing_range_bps(
         {"t": book["t"], "bid_px": book["bid_px"], "ask_px": book["ask_px"]}, r["t_arr"]) \

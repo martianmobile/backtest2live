@@ -127,8 +127,13 @@ def simulate_side(book, trades, t_arr, t_end, P_raw, size, buy):
         return np.where(both, np.minimum(a, b), np.maximum(a, b))
 
     t_touch = first(t_touch_at, t_through)
-    t_through_proxy = np.where(active & (t_through > t_act), t_through, -1)
+    # A print through P clears every order resting at P since arrival, so the
+    # through leg applies from t_arr, also to orders the book never showed at
+    # the touch (the sweep and the book row can share a ms, or the print can
+    # lead the row).
+    t_through_proxy = np.where(live, t_through, -1)
     t_proxy = first(t_fill_at, t_through_proxy)
+    status[(status == NEVER_REACHED) & (t_proxy >= 0)] = ACTIVE
 
     return {"status": status, "queue": queue, "t_act": t_act,
             "touch": t_touch >= 0, "t_touch": t_touch,

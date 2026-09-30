@@ -67,6 +67,8 @@ def to_us(col):
     s = pd.Series(col)
     if pd.api.types.is_numeric_dtype(s):
         v = s.to_numpy(dtype=np.float64)
+        if np.isnan(v).any():
+            raise SystemExit(f"error: blank or non-numeric timestamp in column {s.name!r}")
         mag = np.nanmedian(np.abs(v)) if len(v) else 0
         if mag > 1e17:
             f = 1e-3      # ns
@@ -93,15 +95,28 @@ def _bool(col, what):
     return s.isin(TRUE_WORDS).to_numpy()
 
 
-def load_orders(path, max_rest_s):
+def _read_csv(path, what):
     try:
         df = pd.read_csv(path)
     except FileNotFoundError:
-        raise SystemExit(f"error: file not found: {path!r}")
-    except (pd.errors.EmptyDataError, pd.errors.ParserError) as e:
-        raise SystemExit(f"error: could not read {path!r}: {e}")
+        raise SystemExit(f"error: {what} not found: {path!r}")
+    except (OSError, UnicodeDecodeError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+        raise SystemExit(f"error: could not read {what} {path!r}: {e}")
     if df.empty:
-        raise SystemExit(f"error: no data rows in {path!r}")
+        raise SystemExit(f"error: no data rows in {what} {path!r}")
+    return df
+
+
+def _numeric(df, col, what):
+    v = pd.to_numeric(df[col], errors="coerce")
+    if v.isna().any():
+        bad = df[col][v.isna()].iloc[0]
+        raise SystemExit(f"error: non-numeric {what} in column {col!r}: {bad!r}")
+    return v.to_numpy(np.float64)
+
+
+def load_orders(path, max_rest_s):
+    df = _read_csv(path, "order log")
     c = _resolve(df, ORDER_ALIASES, ("t", "side", "px", "size"), "order log")
 
     side = df[c["side"]].astype(str).str.strip().str.lower()
@@ -128,8 +143,8 @@ def load_orders(path, max_rest_s):
         "t": t,
         "t_end": t_end,
         "buy": side.isin(BUY_WORDS).to_numpy(),
-        "px_f": pd.to_numeric(df[c["px"]], errors="raise").to_numpy(np.float64),
-        "size": pd.to_numeric(df[c["size"]], errors="raise").to_numpy(np.float64),
+        "px_f": _numeric(df, c["px"], "price"),
+        "size": _numeric(df, c["size"], "size"),
         "claimed": claimed,
         "pnl": pd.to_numeric(df[c["pnl"]], errors="coerce").to_numpy(np.float64) if "pnl" in c else None,
         "id": df[c["id"]].astype(str).to_numpy() if "id" in c else np.arange(len(df)).astype(str),
@@ -141,16 +156,16 @@ def load_orders(path, max_rest_s):
 # --- user-supplied book and trades ------------------------------------------
 
 def load_user_book(path):
-    df = pd.read_csv(path)
+    df = _read_csv(path, "book file")
     c = _resolve(df, BOOK_ALIASES, tuple(BOOK_ALIASES), "book file")
     out = {"t": to_us(df[c["t"]])}
     for k in ("bid_px", "bid_qty", "ask_px", "ask_qty"):
-        out[k] = df[c[k]].to_numpy(np.float64)
+        out[k] = _numeric(df, c[k], k)
     return _sort(out)
 
 
 def load_user_trades(path):
-    df = pd.read_csv(path)
+    df = _read_csv(path, "trades file")
     c = _resolve(df, TRADE_ALIASES, ("t", "px", "qty"), "trades file")
     if "is_buyer_maker" in c:
         sell_aggr = _bool(df[c["is_buyer_maker"]], c["is_buyer_maker"])
@@ -160,8 +175,8 @@ def load_user_trades(path):
     else:
         raise SystemExit("error: trades file needs the aggressor side: is_buyer_maker (true = seller hit the bid) "
                          "or side (buy/sell = the taker's side)")
-    return _sort({"t": to_us(df[c["t"]]), "px": df[c["px"]].to_numpy(np.float64),
-                  "qty": df[c["qty"]].to_numpy(np.float64), "sell_aggr": sell_aggr})
+    return _sort({"t": to_us(df[c["t"]]), "px": _numeric(df, c["px"], "price"),
+                  "qty": _numeric(df, c["qty"], "qty"), "sell_aggr": sell_aggr})
 
 
 def _sort(d):
@@ -213,18 +228,27 @@ def _fetch(kind, pair, day, offline, log):
 
 
 def _read_zip_csv(path, usecols, dtype=None):
-    with zipfile.ZipFile(path) as z:
-        with z.open(z.namelist()[0]) as fh:
-            return pd.read_csv(fh, usecols=usecols, dtype=dtype)
+    try:
+        with zipfile.ZipFile(path) as z:
+            with z.open(z.namelist()[0]) as fh:
+                return pd.read_csv(fh, usecols=usecols, dtype=dtype)
+    except (zipfile.BadZipFile, ValueError, IndexError) as e:
+        raise SystemExit(f"error: {os.path.basename(path)} is not a readable archive ({e}); "
+                         f"delete it from the cache and retry")
 
 
 def load_binance_um(pair, days, offline=False, log=print):
-    """bookTicker + aggTrades for the given UTC days, concatenated."""
-    late = [d for d in days if d > BINANCE_BOOKTICKER_LAST]
-    if late:
+    """bookTicker + aggTrades for the given UTC days, concatenated.
+
+    days[0] is the arrival day and must exist in the archive. Later days are
+    only the tail of the rest window: past the archive end they are dropped,
+    and those orders are evaluated on the data available.
+    """
+    if days[0] > BINANCE_BOOKTICKER_LAST:
         raise SystemExit(
             f"error: Binance publishes USDT-M bookTicker only through {BINANCE_BOOKTICKER_LAST}; your orders "
-            f"reach {max(late)}. Pass your own top-of-book and trades with --book and --trades.")
+            f"arrive on {days[0]}. Pass your own top-of-book and trades with --book and --trades.")
+    days = [d for d in days if d <= BINANCE_BOOKTICKER_LAST]
     books, trades = [], []
     for d in days:
         b = _read_zip_csv(_fetch("bookTicker", pair, d, offline, log),
