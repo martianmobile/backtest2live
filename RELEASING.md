@@ -14,11 +14,11 @@ A milestone that closes with nothing to release fails the job. The manual `workf
 ## One-time setup
 
 - [ ] Tag the pre-package baseline: `git tag v0.1.0 c764d62 && git push origin v0.1.0`. Without a tag, semantic-release starts at 1.0.0.
-- [ ] Install the `martian-mobile-release-bot` app on this repo. Add the repo variable `RELEASE_BOT_CLIENT_ID` and the secret `RELEASE_BOT_PRIVATE_KEY`, the same values as `inf-trading`. If `main` is protected, let the app bypass it for the `chore(release)` commit.
+- [ ] Install the release GitHub App on this repo. Add its client ID as the repository variable `RELEASE_BOT_CLIENT_ID` and its private key as the secret `RELEASE_BOT_PRIVATE_KEY`. The workflow mints a token scoped to this repository only. If `main` is protected, let the app bypass it for the `chore(release)` commit.
 - [ ] Settings → General → Pull Requests: allow squash merging only, with the default commit message set to **Pull request title**. Otherwise the `feat:`/`fix:` title never reaches `main`.
 - [ ] PyPI → Publishing → add a pending publisher: project `backtest2live`, owner `martianmobile`, repo `backtest2live`, workflow `release.yml`, environment `pypi`.
 - [ ] TestPyPI: the same, with workflow `testpypi.yml` and environment `testpypi`.
-- [ ] Create GitHub environments `pypi` and `testpypi`. Optionally require MJ's approval on `pypi`.
+- [ ] Create GitHub environments `pypi` and `testpypi`. On `pypi`, set **Deployment branches and tags → Selected branches → `main`**. This is required: a trusted publisher matches on the workflow file name and the environment, not on the ref, so without it any branch carrying an edited `release.yml` could upload. Optionally add a required reviewer on `pypi`.
 
 ## Rehearsal
 

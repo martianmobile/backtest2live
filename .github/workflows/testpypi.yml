@@ -23,10 +23,16 @@ jobs:
         with:
           python-version: "3.13"
       - id: v
-        run: echo "version=${{ inputs.base }}.dev${{ github.run_number }}" >> "$GITHUB_OUTPUT"
-      - run: python scripts/release_version.py set "${{ steps.v.outputs.version }}"
+        env:
+          BASE: ${{ inputs.base }}
+        run: |
+          [[ "$BASE" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::base must be X.Y.Z"; exit 1; }
+          echo "version=${BASE}.dev${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+      - env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: python scripts/release_version.py set "$VERSION"
       - run: pip install build && python -m build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -40,7 +46,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -57,11 +63,15 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install from TestPyPI (dependencies from PyPI)
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
           for i in 1 2 3 4 5 6; do
-            pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ \
-              "backtest2live[data]==${{ needs.build.outputs.version }}" && break
+            if pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ \
+                "backtest2live[data]==$VERSION"; then exit 0; fi
             sleep 20  # the index can lag the upload
           done
+          echo "::error::backtest2live==$VERSION never became installable from TestPyPI"
+          exit 1
       - run: bt2live --version
       - run: bt2live convergence examples/results_converged.csv --json

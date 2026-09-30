@@ -31,7 +31,7 @@ jobs:
         with:
           client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
+          # no owner/repositories: the token covers this repository only
 
       - uses: actions/checkout@v6
         with:
@@ -52,15 +52,16 @@ jobs:
 
       - name: Semantic Release
         id: semantic
-        uses: cycjimmy/semantic-release-action@v6
+        uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90  # v6.0.0, pinned: runs with the write token
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           EXPECTED_VERSION: ${{ github.event.milestone.title || inputs.version }}
         with:
+          semantic_version: 25.0.9
           extra_plugins: |
-            @semantic-release/git
-            @semantic-release/changelog
-            @semantic-release/exec
+            @semantic-release/git@11
+            @semantic-release/changelog@7
+            @semantic-release/exec@7
 
       # A closed milestone that ships nothing is a stranded release, not a no-op.
       - name: Fail when nothing was released
@@ -69,7 +70,7 @@ jobs:
           echo "::error::No release: no feat/fix commits since the last tag, or the version check failed above."
           exit 1
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -85,7 +86,7 @@ jobs:
     permissions:
       id-token: write  # trusted publishing: no token stored
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
