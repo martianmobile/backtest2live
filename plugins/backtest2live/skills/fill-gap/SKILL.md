@@ -18,7 +18,7 @@ One CSV row per order. Required: time (`ts`, epoch or ISO, UTC), `side` (buy/sel
 
 ## Step 3 — Run
 
-Run the `bt2live` CLI if it is installed; otherwise use an isolated runner from the pinned source. `fill-gap` needs the `[data]` extra (numpy, pandas), so the spec carries it in PEP 508 form:
+Run the `bt2live` CLI if it is installed; otherwise use an isolated runner from this repo's `main` branch. `fill-gap` needs the `[data]` extra (numpy, pandas), so the spec carries it in PEP 508 form:
 
 ```bash
 DATA="backtest2live[data] @ git+https://github.com/martianmobile/backtest2live@main"   # until it is on PyPI
