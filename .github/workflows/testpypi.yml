@@ -1,0 +1,67 @@
+name: TestPyPI rehearsal
+
+# Manual dry run of the PyPI path: builds <base>.dev<run>, publishes it to
+# TestPyPI with trusted publishing, then installs it and runs the CLI.
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: "Base version for the dev build"
+        default: "0.2.0"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - id: v
+        run: echo "version=${{ inputs.base }}.dev${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+      - run: python scripts/release_version.py set "${{ steps.v.outputs.version }}"
+      - run: pip install build && python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/backtest2live/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  verify:
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install from TestPyPI (dependencies from PyPI)
+        run: |
+          for i in 1 2 3 4 5 6; do
+            pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ \
+              "backtest2live[data]==${{ needs.build.outputs.version }}" && break
+            sleep 20  # the index can lag the upload
+          done
+      - run: bt2live --version
+      - run: bt2live convergence examples/results_converged.csv --json

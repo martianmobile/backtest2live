@@ -1,7 +1,6 @@
 ---
 name: convergence
 description: Evaluate whether a variant backtest sweep has converged — read the results, measure top-K dispersion, IS/OOS rank stability, and parameter-plateau structure, then decide ship vs iterate vs kill. For quant researchers running parameter sweeps. Trigger with "check convergence", "are these variants converged?", "should I keep iterating?", "evaluate this sweep", "iteration check", "convergence report".
-version: 0.1.0
 ---
 
 # Convergence — variant-sweep evaluation
