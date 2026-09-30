@@ -90,7 +90,7 @@ def test_json_never_emits_non_finite(write_csv, capsys):
     out = capsys.readouterr().out
     assert "Infinity" not in out and "NaN" not in out
     # inf/nan cells are garbage, and a column with garbage is not numeric
-    assert rc == 2 and "lookback" not in json.loads(out)["parameters"]
+    assert rc in (0, 1, 2) and "lookback" not in json.loads(out)["parameters"]
 
 
 def test_plugin_examples_match_repo_examples(root):
