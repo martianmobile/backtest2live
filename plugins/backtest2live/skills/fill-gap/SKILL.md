@@ -19,10 +19,16 @@ One CSV row per order. Required: time (`ts`, epoch or ISO, UTC), `side` (buy/sel
 
 ## Step 3 — Run
 
+Run the `bt2live` CLI if it is installed; otherwise use an isolated runner from the pinned source. Take the first line that applies:
+
 ```bash
-command -v bt2live >/dev/null || python3 -m pip install --user 'backtest2live[data]'
-bt2live fill-gap <orders.csv> --venue binance-um --pair BTCUSDT [--latency-ms 20] [--json]
+SPEC="git+https://github.com/martianmobile/backtest2live@main"   # the package source until it is on PyPI
+command -v bt2live >/dev/null && bt2live fill-gap <orders.csv> --venue binance-um --pair BTCUSDT [--latency-ms 20] [--json]
+command -v uvx     >/dev/null && uvx --from "${SPEC}#egg=backtest2live[data]" bt2live fill-gap <orders.csv> ...
+command -v pipx    >/dev/null && pipx run --spec "${SPEC}#egg=backtest2live[data]" bt2live fill-gap <orders.csv> ...
 ```
+
+`fill-gap` needs the `[data]` extra (numpy, pandas). If none of the three runners exists, ask before installing anything; `python3 -m venv ~/.bt2live && ~/.bt2live/bin/pip install "${SPEC}#egg=backtest2live[data]"` works everywhere. Never install from any other source than `$SPEC`.
 
 Exit code: `0` CONSISTENT, `1` OVERSTATED, `3` error.
 
