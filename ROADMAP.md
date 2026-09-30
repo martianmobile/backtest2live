@@ -1,35 +1,32 @@
 # Roadmap
 
-`strategy-evaluation` is an umbrella for evaluating trading-strategy backtests honestly. Today it ships one capability — **`convergence`** — and grows by adding sibling evaluator skills, each a self-contained folder under `plugins/strategy-evaluation/skills/`.
+`backtest2live` checks a backtest against what live execution would do. It grows by adding evaluators: each is a `bt2live` subcommand, an importable module, and a Claude Code skill.
 
-Tracking: Tier 1 is filed as issues under the [`v0.2` milestone](https://github.com/martianmobile/strategy-evaluation/milestone/1). Tiers 2–3 are directional until promoted.
+Tracking: [milestones](https://github.com/martianmobile/backtest2live/milestones). Order within a milestone follows the `priority:` labels.
 
-## Tier 1 — sharpen the core (`v0.2`, next)
+## v0.2 — first PyPI release
 
-Make the existing convergence verdict defensible on real exports.
+- **Package + CLI** — [#5](https://github.com/martianmobile/backtest2live/issues/5). `pip install backtest2live`, `bt2live <evaluator>`, `--json` on every command; the plugin wraps the CLI.
+- **`fill-gap`** — [#6](https://github.com/martianmobile/backtest2live/issues/6). Your backtest's resting orders re-run under a queue proxy on public order-book data: naive vs proxy fill rate, time to fill, misses by hour and volatility.
+- **Tests + CI** — [#3](https://github.com/martianmobile/backtest2live/issues/3). pytest on Python 3.9–3.13; the core stays dependency-free.
+- **Release** — [#11](https://github.com/martianmobile/backtest2live/issues/11). Closing a milestone publishes the version to GitHub Releases and PyPI.
 
-- **Full metric schema + cardinality-based inference** — [#1](https://github.com/martianmobile/strategy-evaluation/issues/1). Classify param-vs-metric by cardinality (a swept param takes few distinct grid values; a metric is near-unique per variant) instead of a keyword list, so real exports with 12+ metric columns classify correctly. Ships a realistic example.
-- **Multiple-testing correction** — [#2](https://github.com/martianmobile/strategy-evaluation/issues/2). Deflated Sharpe (Bailey–López de Prado) + Probability of Backtest Overfitting folded into the verdict — the rigorous answer to "is my winner real, or did I overfit by trying N variants?"
-- **Tests + CI** — [#3](https://github.com/martianmobile/strategy-evaluation/issues/3). pytest fixtures for all three verdicts + edge cases, GitHub Actions on a Python matrix proving the analyzer stays stdlib-only.
+## v0.3 — any engine, shareable output
 
-## Tier 2 — new evaluators (later)
+- **Schema + engine adapters** — [#7](https://github.com/martianmobile/backtest2live/issues/7). One order-log and results schema; importers for Nautilus, LEAN, backtrader, vectorbt, freqtrade.
+- **Tear sheet** — [#10](https://github.com/martianmobile/backtest2live/issues/10). One shareable performance artifact with a provenance label.
+- **MCP server** — [#8](https://github.com/martianmobile/backtest2live/issues/8). The checks, exposed to any AI assistant.
+- **Deflated Sharpe + PBO** — [#2](https://github.com/martianmobile/backtest2live/issues/2). Is the winner real, or did N variants overfit?
+- **Preflight report** — [#9](https://github.com/martianmobile/backtest2live/issues/9). The checks in one document.
+- **Cardinality-based column inference** — [#1](https://github.com/martianmobile/backtest2live/issues/1). Classify parameters vs metrics by cardinality, not keywords (today `window` reads as a metric because it contains `win`).
 
-The umbrella payoff — each a sibling skill alongside `convergence`.
+## Later (directional)
 
-- **`robustness`** — outlier-trade drop test (does edge survive removing top-k PnL trades?), bootstrap CIs on Sharpe, parameter-perturbation sensitivity.
-- **`walk-forward`** — multi-fold rolling/anchored stability of a chosen variant, beyond a single IS/OOS split.
-- **`regime`** — performance broken out by vol/trend regime; flags strategies that only work in one regime.
-
-## Tier 3 — workflow & polish (later)
-
-- **Folder / multi-file input** — point at a directory of per-variant exports and auto-assemble the variant table.
-- **`--json` output + `config.yaml`** — machine-readable verdict for CI gating (fail a research build if not CONVERGED); project-pinned defaults.
-- **Visual report** — HTML/SVG heatmap of the parameter grid colored by metric, with the plateau/edge highlighted.
-
-## Stretch
-
-- **Joint multi-metric convergence** — require a secondary metric (e.g. max-drawdown, hit-rate) to also converge before declaring CONVERGED. Enabled by the Tier-1 schema work.
+- **`robustness`** — outlier-trade drop test, bootstrap CIs on Sharpe, parameter-perturbation sensitivity.
+- **`walk-forward`** — multi-fold rolling/anchored stability of a chosen variant.
+- **`regime`** — performance by vol/trend regime; flags strategies that only work in one.
+- **Visual report** — parameter-grid heatmap with the plateau and edge highlighted.
 
 ---
 
-Contributions welcome — issues tagged [`good first issue`](https://github.com/martianmobile/strategy-evaluation/labels/good%20first%20issue) are a good entry point. Built by [Martian Mobile](https://martianmobile.com).
+Contributions welcome. Built by [Martian Mobile](https://martianmobile.com).

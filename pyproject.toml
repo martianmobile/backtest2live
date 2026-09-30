@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "backtest2live"
+version = "0.1.0"
+description = "Check a backtest against what live execution would do: convergence, fill-gap, and more, run locally."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+authors = [{ name = "Martian Mobile", email = "martin@martianmobile.com" }]
+keywords = ["backtest", "quant", "trading", "overfitting", "execution", "fill-rate"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+bt2live = "backtest2live.cli:main"
+
+[project.urls]
+Homepage = "https://martianmobile.com"
+Source = "https://github.com/martianmobile/backtest2live"
+Issues = "https://github.com/martianmobile/backtest2live/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/backtest2live"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

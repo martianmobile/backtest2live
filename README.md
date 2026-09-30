@@ -1,41 +1,42 @@
-# strategy-evaluation
+# backtest2live
 
-A Claude Code plugin for quant researchers: **evaluate trading-strategy backtests** and get an honest verdict on what to do next.
+[![CI](https://github.com/martianmobile/backtest2live/actions/workflows/ci.yml/badge.svg)](https://github.com/martianmobile/backtest2live/actions/workflows/ci.yml)
 
-The convergence math is computed deterministically by a bundled, dependency-free Python analyzer. Claude interprets the verdict and — on an ITERATE — proposes concrete next variants.
+**Check a backtest against what live execution would do.** Evaluators run locally on your own files and public data, and each one returns a verdict with the numbers behind it.
 
-This is the public, MIT-licensed, sanitized version of patterns used in live crypto trading research at [Martian Mobile](https://martianmobile.com).
+Use it three ways: as a Python CLI (`bt2live`), as a library, or as a Claude Code plugin where the agent runs the CLI and interprets the verdict.
+
+This is the public, MIT-licensed version of checks used in live crypto trading research at [Martian Mobile](https://martianmobile.com).
 
 ---
 
-## Capabilities
+## Evaluators
 
-| Skill | Status | What it does |
-|-------|--------|--------------|
-| **`convergence`** | shipped (v0.1) | Read a variant parameter sweep → measure dispersion, IS/OOS rank stability, and parameter-plateau structure → verdict: **CONVERGED / ITERATE / KILL**. |
-| `robustness` | planned | Single-strategy OOS degradation / outlier-sensitivity scoring. |
-| `walk-forward` | planned | Rolling-window stability of a chosen variant. |
+| Command | Status | What it does |
+|---------|--------|--------------|
+| **`bt2live convergence`** | shipped | Read a variant parameter sweep → measure dispersion, IS/OOS rank stability, and parameter-plateau structure → verdict: **CONVERGED / ITERATE / KILL**. |
+| `bt2live fill-gap` | next (v0.2) | Re-run your backtest's resting orders under a queue proxy on public order-book data → naive vs proxy fill rate. |
 
-Each capability is a self-contained skill folder under `plugins/strategy-evaluation/skills/`, so new evaluators drop in without touching the existing ones.
+Roadmap: [ROADMAP.md](ROADMAP.md) and the [milestones](https://github.com/martianmobile/backtest2live/milestones).
 
 ---
 
 ## Install
 
-This repo is also a Claude Code plugin marketplace. From inside Claude Code:
-
-```
-/plugin marketplace add martianmobile/strategy-evaluation
-/plugin install strategy-evaluation@martianmobile
+```bash
+pip install backtest2live
 ```
 
-Then invoke the convergence evaluator:
+The core has no runtime dependencies (Python 3.9+).
+
+**Claude Code plugin.** This repo is also a plugin marketplace. From inside Claude Code:
 
 ```
-/convergence results.csv --metric sharpe_oos
+/plugin marketplace add martianmobile/backtest2live
+/plugin install backtest2live@martianmobile
 ```
 
-…or just ask in natural language: *"are these variants converged?"*, *"should I keep iterating?"*
+Then ask *"are these variants converged?"* or run `/convergence results.csv --metric sharpe_oos`. The skill installs the CLI if it is missing.
 
 ---
 
@@ -60,15 +61,13 @@ Given one row per variant (parameters + metrics), it measures:
 
 ## Usage
 
-Direct (no Claude required — it's a plain CLI):
-
 ```bash
-python3 plugins/strategy-evaluation/skills/convergence/scripts/analyze.py \
-  plugins/strategy-evaluation/skills/convergence/examples/results_converged.csv \
-  --metric sharpe_oos
+bt2live convergence examples/results_converged.csv --metric sharpe_oos
+bt2live convergence examples/results_converged.csv --json    # machine-readable verdict
+python -m backtest2live convergence results.csv              # same, without the script shim
 ```
 
-Exit code encodes the verdict: `0` CONVERGED · `1` ITERATE · `2` KILL.
+Exit code encodes the verdict: `0` CONVERGED · `1` ITERATE · `2` KILL · `3` error (bad input or usage), so a CI job can gate on it.
 
 ### Input format
 
@@ -94,7 +93,8 @@ Column roles are inferred from names/types. IS/OOS pairs are detected by suffix 
 | `--rank-threshold` | 0.6 | Min IS/OOS Spearman for CONVERGED |
 | `--lower-is-better` / `--higher-is-better` | auto | Metric direction override |
 | `--id-column` / `--sample-column` | auto | Column-role overrides |
-| `--save` | off | Also write `iteration_check_<timestamp>.md` |
+| `--save` | off | Also write `iteration_check_<timestamp>.md` in the current directory |
+| `--json` | off | Print the verdict and numbers as JSON instead of Markdown |
 
 ---
 
@@ -134,7 +134,7 @@ IS→OOS rank stability (Spearman): 0.99 (threshold > 0.60 ✓)
 
 ## Why this exists
 
-In real quant research, the failure mode isn't running too few backtests — it's calling one lucky variant a "winner" when its neighbors perform completely differently. Convergence-across-variants is the only honest signal that the parameter region has structure. This plugin enforces the discipline — and gives the same treatment to the other ways a strategy can look better than it is.
+In real quant research, the failure mode isn't running too few backtests — it's calling one lucky variant a "winner" when its neighbors perform completely differently. Convergence-across-variants is the only honest signal that the parameter region has structure. This tool enforces the discipline — and gives the same treatment to the other ways a strategy can look better than it is.
 
 ---
 

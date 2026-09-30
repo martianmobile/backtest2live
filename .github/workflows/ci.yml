@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      # The core has no runtime dependencies: only pytest is installed on top.
+      - run: pip install -e '.[test]'
+      - run: pytest -q
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check --strict dist/*
+      - name: Wheel installs clean and runs
+        run: |
+          python -m venv /tmp/wheel && /tmp/wheel/bin/pip install dist/*.whl
+          /tmp/wheel/bin/bt2live --version
+          /tmp/wheel/bin/bt2live convergence examples/results_converged.csv --json > /dev/null
