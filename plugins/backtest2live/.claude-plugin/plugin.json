@@ -1,0 +1,11 @@
+{
+  "name": "backtest2live",
+  "description": "Check a backtest against what live execution would do, run locally. Convergence across a variant sweep (CONVERGED / ITERATE / KILL) with the numbers behind the verdict; fill-gap and more evaluators follow. Wraps the backtest2live CLI.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Martian Mobile",
+    "email": "martin@martianmobile.com"
+  },
+  "homepage": "https://github.com/martianmobile/backtest2live",
+  "license": "MIT"
+}

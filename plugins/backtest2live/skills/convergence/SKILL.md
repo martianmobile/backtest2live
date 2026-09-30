@@ -6,9 +6,9 @@ version: 0.1.0
 
 # Convergence — variant-sweep evaluation
 
-The first capability of the **strategy-evaluation** plugin. Drop in a table of variant backtest results — get a convergence verdict and a recommendation: ship the winner, iterate further, or kill the line of research.
+The first capability of the **backtest2live** plugin. Drop in a table of variant backtest results — get a convergence verdict and a recommendation: ship the winner, iterate further, or kill the line of research.
 
-This is the public, sanitized version of an internal pattern used to run multi-variant parameter sweeps in live crypto trading research at Martian Mobile. The convergence math is computed deterministically by a bundled Python analyzer; the qualitative call on *which variants to try next* is left to the agent.
+This is the public, sanitized version of an internal pattern used to run multi-variant parameter sweeps in live crypto trading research at Martian Mobile. The convergence math is computed deterministically by the `backtest2live` Python package (`bt2live` CLI); the qualitative call on *which variants to try next* is left to the agent.
 
 > Sibling evaluators (robustness, walk-forward, regime breakdown) can live alongside this one as additional skills under the same plugin.
 
@@ -23,7 +23,7 @@ This is the public, sanitized version of an internal pattern used to run multi-v
 │  ✓ Each row = one variant (params + metrics)                    │
 │  ✓ You specify the convergence metric (Sharpe, hit-rate, etc.)  │
 ├─────────────────────────────────────────────────────────────────┤
-│  ANALYSIS  (scripts/analyze.py, stdlib only)                    │
+│  ANALYSIS  (bt2live convergence, stdlib only)                   │
 │  ✓ Dispersion of top-K variants on chosen metric                │
 │  ✓ Stability across IS / OOS windows (Spearman, if present)     │
 │  ✓ Parameter-space neighborhood check (winners cluster?)        │
@@ -71,9 +71,9 @@ v003, 25, 0.5, 1.85, 1.58, 401
 
 The analyzer infers what's a metric and what's a parameter from column names and types. IS/OOS pairs are detected by suffix (`_is`/`_oos`, `_in`/`_out`, `_train`/`_test`). Override any inference with `--metric`, `--id-column`, `--sample-column`.
 
-Runnable samples ship beside this skill:
-- `${CLAUDE_PLUGIN_ROOT}/skills/convergence/examples/results_converged.csv` → CONVERGED
-- `${CLAUDE_PLUGIN_ROOT}/skills/convergence/examples/results_iterate.csv` → ITERATE
+Runnable samples live in the repo's `examples/` folder:
+- `examples/results_converged.csv` → CONVERGED
+- `examples/results_iterate.csv` → ITERATE
 
 ---
 
@@ -85,11 +85,14 @@ When invoked, do this:
 Resolve the file path the user gave (a CSV, or a Parquet/SQLite they should export to CSV). If they didn't name a metric, you can let the analyzer auto-detect, but prefer to confirm the ranking metric if it's ambiguous.
 
 ### Step 2 — Run the analyzer (it does the math)
-Run the bundled script — it is pure Python 3 stdlib, no install needed:
+Run the `bt2live` CLI. If `command -v bt2live` finds nothing, install it first — the core has no dependencies, so the install is small:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/convergence/scripts/analyze.py" <input.csv> --metric <metric> [--top-k 5] [--save]
+command -v bt2live >/dev/null || python3 -m pip install --user backtest2live
+bt2live convergence <input.csv> --metric <metric> [--top-k 5] [--save]
 ```
+
+Use `--json` when you need the numbers programmatically (same verdict, machine-readable).
 
 Useful flags (defaults match the config below):
 - `--metric` ranking metric column (auto-detected if omitted)
@@ -100,12 +103,12 @@ Useful flags (defaults match the config below):
 - `--lower-is-better` / `--higher-is-better` direction override
 - `--save` also writes `iteration_check_<timestamp>.md`
 
-The script prints the full Markdown report and sets an exit code: `0` CONVERGED, `1` ITERATE, `2` KILL.
+The CLI prints the full Markdown report and sets an exit code: `0` CONVERGED, `1` ITERATE, `2` KILL, `3` error (bad input or usage).
 
 ### Step 3 — Relay and interpret
-Present the analyzer's report. Then add value the deterministic script cannot:
+Present the analyzer's report. Then add value the deterministic analyzer cannot:
 - **CONVERGED** → confirm the winning variant and what "advance to next stage" means for their pipeline.
-- **ITERATE** → turn the script's generic suggestions into *concrete next variants*: name the parameter ranges to expand, the new parameter to add (e.g. a vol filter if winners share a regime), or the resampling to run. Be specific.
+- **ITERATE** → turn the analyzer's generic suggestions into *concrete next variants*: name the parameter ranges to expand, the new parameter to add (e.g. a vol filter if winners share a regime), or the resampling to run. Be specific.
 - **KILL** → state plainly that no stable edge exists, and what would have to change (different metric, different feature set, more data) before re-sweeping is worth it.
 
 Never override the analyzer's numbers — interpret them.

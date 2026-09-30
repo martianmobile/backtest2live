@@ -10,3 +10,8 @@ venv/
 # OS / editor
 .DS_Store
 .idea/
+
+# Build
+dist/
+build/
+*.egg-info/

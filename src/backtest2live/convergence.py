@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 """
-strategy-evaluation · convergence — variant-sweep convergence analyzer.
+backtest2live · convergence — variant-sweep convergence analyzer.
 
 Reads a table of variant backtest results (one row per variant), measures
 convergence on a chosen metric, and emits a verdict: CONVERGED / ITERATE / KILL.
@@ -9,15 +8,16 @@ Pure Python 3 standard library — no third-party dependencies, no pip install.
 CSV in, Markdown report out. For Parquet/SQLite inputs, export to CSV first.
 
 Usage:
-    python3 analyze.py results.csv --metric sharpe_oos
-    python3 analyze.py results.csv --metric sharpe --top-k 5 --save
+    bt2live convergence results.csv --metric sharpe_oos
+    bt2live convergence results.csv --metric sharpe --top-k 5 --save
+    bt2live convergence results.csv --json
 
 The math is deterministic and lives here. The qualitative framing of an
 ITERATE result (which next variants to try) is left to the calling agent.
 """
 
-import argparse
 import csv
+import json
 import math
 import statistics
 import sys
@@ -483,11 +483,10 @@ def _recommendation(ctx):
     return out
 
 
-def main(argv=None):
-    p = argparse.ArgumentParser(
-        prog="analyze.py",
-        description="Convergence analysis for variant backtest sweeps (CONVERGED / ITERATE / KILL).",
-    )
+VERDICT_EXIT = {"CONVERGED": 0, "ITERATE": 1, "KILL": 2}
+
+
+def add_arguments(p):
     p.add_argument("input", help="CSV file: one row per variant")
     p.add_argument("--metric", help="Ranking metric column (e.g. sharpe_oos). Auto-detected if omitted.")
     p.add_argument("--top-k", type=int, default=5, help="Number of top variants to assess (default 5)")
@@ -502,12 +501,55 @@ def main(argv=None):
     p.add_argument("--higher-is-better", action="store_true", help="Force higher-is-better (override name heuristic)")
     p.add_argument("--run-name", help="Label for the report header")
     p.add_argument("--date", help="Date for the report header (default: today)")
-    p.add_argument("--save", action="store_true", help="Also write iteration_check_<timestamp>.md next to the input")
-    args = p.parse_args(argv)
+    p.add_argument("--save", action="store_true",
+                   help="Also write iteration_check_<timestamp>.md in the current directory")
+    p.add_argument("--json", action="store_true", help="Print a machine-readable verdict instead of Markdown")
 
+
+def to_json(ctx):
+    """Machine-readable verdict: the numbers behind the Markdown report."""
+    getf = ctx["getf"]
+    return {
+        "schema": "backtest2live.convergence/1",
+        "input": ctx["path"],
+        "verdict": ctx["verdict"],
+        "exit_code": VERDICT_EXIT[ctx["verdict"]],
+        "metric": ctx["rank_col"],
+        "lower_is_better": ctx["lower_better"],
+        "is_column": ctx["is_col"],
+        "oos_column": ctx["oos_col"],
+        "sample_column": ctx["sample_col"],
+        "top_k": ctx["k"],
+        "n_variants": ctx["n"],
+        "top": [{"id": r.get(ctx["id_col"]), "value": getf(r, ctx["rank_col"])} for r in ctx["top"]],
+        "dispersion": {"rank": ctx["disp_rank"], "is": ctx["disp_is"], "oos": ctx["disp_oos"]},
+        "is_oos_spearman": ctx["rho"],
+        "separation_sigma": ctx["separation"],
+        "plateau": ctx["plateau"],
+        "edge_peak": ctx["any_edge"],
+        "parameters": {
+            p: {"occupied": f["occupied"], "contiguous": f["contiguous"], "edge": f["edge"]}
+            for p, f in ctx["params"].items()
+        },
+        "samples_ok": ctx["samples_ok"],
+        "low_sample_variants": [{"id": vid, "n": n} for vid, n in ctx["low_sample_variants"]],
+        "kill_reasons": ctx["kill_reasons"],
+        "thresholds": {
+            "dispersion": ctx["args"].dispersion_threshold,
+            "rank": ctx["args"].rank_threshold,
+            "min_samples": ctx["args"].min_samples,
+        },
+    }
+
+
+def run(args):
+    """CLI entry for `bt2live convergence`. Returns the verdict exit code."""
     ctx = analyze(args.input, args)
     report = build_report(ctx)
-    print(report)
+    if args.json:
+        print(json.dumps(to_json(ctx), indent=2, ensure_ascii=False))
+    else:
+        print(report)
 
     if args.save:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -517,8 +559,4 @@ def main(argv=None):
         print(f"\n[saved report → {out_path}]", file=sys.stderr)
 
     # Exit code encodes the verdict for scripting: 0 CONVERGED, 1 ITERATE, 2 KILL.
-    return {"CONVERGED": 0, "ITERATE": 1, "KILL": 2}[ctx["verdict"]]
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    return VERDICT_EXIT[ctx["verdict"]]
