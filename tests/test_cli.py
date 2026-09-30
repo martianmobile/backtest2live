@@ -74,3 +74,27 @@ def test_core_is_stdlib_only(root):
     )
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_crash_is_error_not_verdict(tmp_path, capsys):
+    bad = tmp_path / "latin1.csv"
+    bad.write_bytes(b"variant_id,sharpe\nv1,1.0\nv\xe9,2.0\n")
+    assert cli.main(["convergence", str(bad)]) == cli.EXIT_ERROR
+    assert "error:" in capsys.readouterr().err
+    assert cli.main(["convergence", str(bad), "--top-k", "0"]) == cli.EXIT_ERROR
+
+
+def test_json_never_emits_non_finite(write_csv, capsys):
+    p = write_csv("variant_id,lookback,sharpe\nv1,inf,1.0\nv2,20,2.0\nv3,nan,0.5\nv4,30,1.5")
+    rc = cli.main(["convergence", p, "--metric", "sharpe", "--json"])
+    out = capsys.readouterr().out
+    assert "Infinity" not in out and "NaN" not in out
+    # inf/nan cells are garbage, and a column with garbage is not numeric
+    assert rc == 2 and "lookback" not in json.loads(out)["parameters"]
+
+
+def test_plugin_examples_match_repo_examples(root):
+    for name in ("results_converged.csv", "results_iterate.csv"):
+        a = (root / "examples" / name).read_bytes()
+        b = (root / "plugins/backtest2live/skills/convergence/examples" / name).read_bytes()
+        assert a == b, name

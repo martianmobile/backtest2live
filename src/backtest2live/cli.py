@@ -50,6 +50,9 @@ def main(argv=None):
             print(e.code, file=sys.stderr)
             return EXIT_ERROR
         raise
+    except Exception as e:  # a crash must not read as a verdict
+        print(f"error: {type(e).__name__}: {e}", file=sys.stderr)
+        return EXIT_ERROR
 
 
 if __name__ == "__main__":
