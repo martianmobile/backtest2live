@@ -1,7 +1,6 @@
 ---
 name: fill-gap
 description: Check whether a backtest's passive (maker/limit) fills survive a queue — re-run the order log against top-of-book and trades and compare the backtest's fill rate with a queue-proxy fill rate. For quant researchers with resting limit orders in their backtest. Trigger with "check my fills", "are my maker fills realistic?", "fill gap", "fill at touch", "queue position check", "would these limit orders have filled?".
-version: 0.2.0
 ---
 
 # Fill gap — do your backtest's passive fills survive a queue?
