@@ -429,8 +429,10 @@ def _summary_line(ctx):
     v = ctx["verdict"]
     if v == "CONVERGED":
         top_id = ctx["top"][0].get(ctx["id_col"])
+        # Nested same-quote f-strings are Python 3.12+ only; keep 3.9 parsing.
+        stable = "" if ctx["rho"] is None else f", OOS-stable (ρ={fmt_num(ctx['rho'])})"
         return (f"Top-{ctx['k']} cluster tightly ({fmt_pct(ctx['disp_rank'])} dispersion) on a parameter plateau"
-                f"{'' if ctx['rho'] is None else f', OOS-stable (ρ={fmt_num(ctx['rho'])})'} — ship `{top_id}`.")
+                f"{stable} — ship `{top_id}`.")
     if v == "KILL":
         return ctx["kill_reasons"][0] if ctx["kill_reasons"] else "No stable edge in the swept parameter space."
     return "Convergence not yet achieved — some criteria unmet (see below)."
