@@ -23,6 +23,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
+data = ["numpy>=1.23", "pandas>=1.5"]
 test = ["pytest>=7"]
 
 [project.scripts]
