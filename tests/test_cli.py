@@ -76,6 +76,20 @@ def test_core_is_stdlib_only(root):
     assert r.returncode == 0, r.stderr
 
 
+def test_fill_gap_without_numpy_says_how_to_install(root, tmp_path):
+    orders = tmp_path / "o.csv"
+    orders.write_text("ts,side,price,size\n1,buy,1,1\n")
+    code = (
+        "import sys\n"
+        "for m in ('pandas', 'numpy'): sys.modules[m] = None\n"
+        "from backtest2live import cli\n"
+        f"sys.exit(cli.main(['fill-gap', {str(orders)!r}, '--venue', 'binance-um', '--pair', 'X']))\n"
+    )
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert r.returncode == 3
+    assert "backtest2live[data]" in r.stderr
+
+
 def test_crash_is_error_not_verdict(tmp_path, capsys):
     bad = tmp_path / "latin1.csv"
     bad.write_bytes(b"variant_id,sharpe\nv1,1.0\nv\xe9,2.0\n")

@@ -20,8 +20,29 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-      # The core has no runtime dependencies: only pytest is installed on top.
+      - run: pip install -e '.[test,data]'
+      - run: pytest -q
+
+  core-only:
+    # convergence must run with no third-party packages; fill-gap tests skip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
       - run: pip install -e '.[test]'
+      - run: pytest -q
+
+  min-deps:
+    # the lowest numpy/pandas the data extra allows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.9"
+      - run: pip install -e '.[test]' 'numpy==1.23.5' 'pandas==1.5.3'
       - run: pytest -q
 
   package:

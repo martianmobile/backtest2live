@@ -8,7 +8,7 @@ run never reads as a verdict in CI.
 import argparse
 import sys
 
-from backtest2live import __version__, convergence
+from backtest2live import __version__, convergence, fillgap
 
 EXIT_ERROR = 3
 
@@ -37,6 +37,15 @@ def build_parser():
     )
     convergence.add_arguments(c)
     c.set_defaults(run=convergence.run)
+
+    f = sub.add_parser(
+        "fill-gap",
+        help="Your backtest's passive fills vs a queue proxy on market data",
+        description="Re-run your backtest's resting orders under a queue proxy on top-of-book and trades. "
+                    "Exit code: 0 CONSISTENT, 1 OVERSTATED, 3 error.",
+    )
+    fillgap.add_arguments(f)
+    f.set_defaults(run=fillgap.run)
     return p
 
 

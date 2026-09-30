@@ -15,7 +15,7 @@ This is the public, MIT-licensed version of checks used in live crypto trading r
 | Command | Status | What it does |
 |---------|--------|--------------|
 | **`bt2live convergence`** | shipped | Read a variant parameter sweep → measure dispersion, IS/OOS rank stability, and parameter-plateau structure → verdict: **CONVERGED / ITERATE / KILL**. |
-| `bt2live fill-gap` | next (v0.2) | Re-run your backtest's resting orders under a queue proxy on public order-book data → naive vs proxy fill rate. |
+| **`bt2live fill-gap`** | shipped | Re-run your backtest's resting orders under a queue proxy on top-of-book and trades → your fill rate vs the proxy's: **CONSISTENT / OVERSTATED**. |
 
 Roadmap: [ROADMAP.md](ROADMAP.md) and the [milestones](https://github.com/martianmobile/backtest2live/milestones).
 
@@ -27,7 +27,11 @@ Roadmap: [ROADMAP.md](ROADMAP.md) and the [milestones](https://github.com/martia
 pip install backtest2live
 ```
 
-The core has no runtime dependencies (Python 3.9+).
+The core has no runtime dependencies (Python 3.9+). `fill-gap` needs numpy and pandas:
+
+```bash
+pip install 'backtest2live[data]'
+```
 
 **Claude Code plugin.** This repo is also a plugin marketplace. From inside Claude Code:
 
@@ -40,7 +44,55 @@ Then ask *"are these variants converged?"* or run `/convergence results.csv --me
 
 ---
 
-## What `convergence` checks
+## `fill-gap`: do your backtest's passive fills survive a queue?
+
+A backtest that fills a resting order whenever price touches it counts fills a live order would never get: the order sits behind the queue already displayed at that price. `fill-gap` re-runs each resting order in your order log against top-of-book and trade prints, and grants a fill only when:
+
+- the volume printed at exactly your price, after you joined, covers the queue ahead of you plus your own size, or
+- a trade prints through your price, which means the level was cleared.
+
+```bash
+bt2live fill-gap examples/orders_btcusdt_2024-03-30.csv --venue binance-um --pair BTCUSDT
+```
+
+```
+## Verdict: OVERSTATED
+
+**Your backtest fills 95.2% of its resting orders; the queue proxy fills 66.2%.
+30.4% of the counted fills (834 of 2,740) are not granted on this data.**
+```
+
+The report continues with fill rates by rule, median time to fill, misses by volatility tercile and by UTC hour, and P&L on missed fills if your log has a `pnl` column. `--json` gives the same result machine-readable. Exit code: `0` CONSISTENT, `1` OVERSTATED (more than `--tolerance`, default 10%, of your fills not granted), `3` error.
+
+### Your order log
+
+CSV, one row per order. Column names are matched case-insensitively:
+
+| Role | Accepted names | Required |
+|------|----------------|----------|
+| time | `ts`, `timestamp`, `time`, `datetime`, `created_at` | yes (epoch s/ms/µs/ns or ISO-8601, UTC) |
+| side | `side` (`buy`/`sell`) | yes |
+| price | `price`, `px`, `limit_price` | yes |
+| size | `size`, `qty`, `quantity`, `amount` | yes (base units) |
+| backtest's fill | `filled` (true/false, 1/0) or `fill_qty` | no: without it, the touch rule is the baseline |
+| end of life | `end_ts`, `cancel_ts`, `expire_ts` | no: default `--max-rest 60` seconds |
+| P&L | `pnl` | no |
+| id | `order_id` | no |
+
+Orders marketable at arrival are taker orders and are skipped. `--latency-ms` delays every order's arrival at the book.
+
+### Market data
+
+- **`--venue binance-um --pair BTCUSDT`** downloads Binance's public USDT-M futures archive (`bookTicker` + `aggTrades`) for the days your orders cover, checks the published SHA-256, and caches it under `~/.cache/backtest2live` (`BT2LIVE_CACHE` overrides). About 100 MB per day for BTCUSDT. Binance stopped publishing `bookTicker` after **2024-03-30**, so this source covers orders up to that day.
+- **`--book l1.csv --trades trades.csv`** uses your own recorded data, any venue and any date. Book: `ts, bid_px, bid_qty, ask_px, ask_qty` (every change of the best bid/ask). Trades: `ts, price, qty` plus `is_buyer_maker` (true when a seller hit the bid) or the taker's `side`.
+
+### What the proxy cannot see
+
+The touch rule is an upper bound: a resting order fills only if something trades at or through its price. The proxy is an estimate below it. Hidden size, your latency and your own impact make it too generous. Cancels ahead of you, and a queue position read from the size shown when the price reached you, make it too strict. How that nets out depends on venue, size and regime. Only your own live fills settle it; [Martian Mobile](https://martianmobile.com/fill-autopsy?utm_source=github&utm_medium=readme&utm_campaign=fill-gap) runs that check against live fills.
+
+---
+
+## `convergence`: has your variant sweep converged?
 
 Given one row per variant (parameters + metrics), it measures:
 
@@ -59,7 +111,7 @@ Given one row per variant (parameters + metrics), it measures:
 
 ---
 
-## Usage
+### Usage
 
 ```bash
 bt2live convergence examples/results_converged.csv --metric sharpe_oos
@@ -98,7 +150,7 @@ Column roles are inferred from names/types. IS/OOS pairs are detected by suffix 
 
 ---
 
-## Example output
+### Example output
 
 ```
 # Iteration Check | results_converged.csv | 2026-06-06
