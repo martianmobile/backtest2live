@@ -11,14 +11,18 @@ Tracking: [milestones](https://github.com/martianmobile/backtest2live/milestones
 - **Tests + CI** — [#3](https://github.com/martianmobile/backtest2live/issues/3). pytest on Python 3.9–3.13; the core stays dependency-free.
 - **Release** — [#11](https://github.com/martianmobile/backtest2live/issues/11). Closing a milestone publishes the version to GitHub Releases and PyPI.
 
-## v0.3 — any engine, shareable output
+## v0.3 — any backtest, any engine, shareable output
 
-- **Schema + engine adapters** — [#7](https://github.com/martianmobile/backtest2live/issues/7). One order-log and results schema; importers for Nautilus, LEAN, backtrader, vectorbt, freqtrade.
+The toolkit checks artifacts a backtest already produces. It does not define strategies or run them: the order-log schema is the connection to the strategy, whatever engine wrote it.
+
+- **`cost-gap`** — [#16](https://github.com/martianmobile/backtest2live/issues/16). For bar-based backtests, which have no resting orders: each market order re-priced against the real book at its time, with latency. Spread, depth and latency cost vs the backtest's fill price.
+- **Schema + engine adapters** — [#7](https://github.com/martianmobile/backtest2live/issues/7). One order-log and results schema; importers for Nautilus, LEAN, backtrader, vectorbt, freqtrade, so the export is one command.
 - **Tear sheet** — [#10](https://github.com/martianmobile/backtest2live/issues/10). One shareable performance artifact with a provenance label.
 - **MCP server** — [#8](https://github.com/martianmobile/backtest2live/issues/8). The checks, exposed to any AI assistant.
 - **Deflated Sharpe + PBO** — [#2](https://github.com/martianmobile/backtest2live/issues/2). Is the winner real, or did N variants overfit?
 - **Preflight report** — [#9](https://github.com/martianmobile/backtest2live/issues/9). The checks in one document.
 - **Cardinality-based column inference** — [#1](https://github.com/martianmobile/backtest2live/issues/1). Classify parameters vs metrics by cardinality, not keywords (today `window` reads as a metric because it contains `win`).
+- **`fill-gap simulate`** — [#17](https://github.com/martianmobile/backtest2live/issues/17), gated on demand. A quoting function replayed on public L1, naive and proxy fills side by side, for users with no order-level log.
 
 ## Later (directional)
 
