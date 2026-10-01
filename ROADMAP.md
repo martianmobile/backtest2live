@@ -11,9 +11,11 @@ Tracking: [milestones](https://github.com/martianmobile/backtest2live/milestones
 - **Tests + CI** — [#3](https://github.com/martianmobile/backtest2live/issues/3). pytest on Python 3.9–3.13; the core stays dependency-free.
 - **Release** — [#11](https://github.com/martianmobile/backtest2live/issues/11). Closing a milestone publishes the version to GitHub Releases and PyPI.
 
-## v0.3 — any backtest, any engine, shareable output
+## v0.3 — run the contract, check any engine, share the output
 
-The toolkit checks artifacts a backtest already produces. It does not define strategies or run them: the order-log schema is the connection to the strategy, whatever engine wrote it.
+Two ways in. A strategy written to the published `StrategyProtocol` contract (the format Validate accepts) runs locally with `bt2live run`. A backtest from any other engine connects through the order-log schema and its adapters.
+
+- **`bt2live run`** — [#15](https://github.com/martianmobile/backtest2live/issues/15). Load a strategy package on the published contract, build its inputs from public data, simulate fills at both ends of the band (front of queue vs tape traded through) and taker fills through the published simulator. Emits order logs in the `fill-gap` schema and two equity curves.
 
 - **`cost-gap`** — [#16](https://github.com/martianmobile/backtest2live/issues/16). For bar-based backtests, which have no resting orders: each market order re-priced against the real book at its time, with latency. Spread, depth and latency cost vs the backtest's fill price.
 - **Schema + engine adapters** — [#7](https://github.com/martianmobile/backtest2live/issues/7). One order-log and results schema; importers for Nautilus, LEAN, backtrader, vectorbt, freqtrade, so the export is one command.
@@ -22,7 +24,6 @@ The toolkit checks artifacts a backtest already produces. It does not define str
 - **Deflated Sharpe + PBO** — [#2](https://github.com/martianmobile/backtest2live/issues/2). Is the winner real, or did N variants overfit?
 - **Preflight report** — [#9](https://github.com/martianmobile/backtest2live/issues/9). The checks in one document.
 - **Cardinality-based column inference** — [#1](https://github.com/martianmobile/backtest2live/issues/1). Classify parameters vs metrics by cardinality, not keywords (today `window` reads as a metric because it contains `win`).
-- **`fill-gap simulate`** — [#17](https://github.com/martianmobile/backtest2live/issues/17), gated on demand. A quoting function replayed on public L1, naive and proxy fills side by side, for users with no order-level log.
 
 ## Later (directional)
 
