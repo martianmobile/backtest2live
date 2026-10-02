@@ -84,10 +84,10 @@ When invoked, do this:
 Resolve the file path the user gave (a CSV, or a Parquet/SQLite they should export to CSV). If they didn't name a metric, you can let the analyzer auto-detect, but prefer to confirm the ranking metric if it's ambiguous.
 
 ### Step 2 — Run the analyzer (it does the math)
-Run the `bt2live` CLI. If it is not installed, run it through an isolated runner instead of installing into the user's Python:
+Run the `bt2live` CLI. If it is not installed, run it through an isolated runner from PyPI instead of installing into the user's Python:
 
 ```bash
-SPEC="backtest2live @ git+https://github.com/martianmobile/backtest2live@main"   # the package source until it is on PyPI
+SPEC="backtest2live"
 ARGS=(convergence <input.csv> --metric <metric>)   # plus [--top-k 5] [--save] [--json]
 if   command -v bt2live >/dev/null; then bt2live "${ARGS[@]}"
 elif command -v uvx     >/dev/null; then uvx --from "$SPEC" bt2live "${ARGS[@]}"
