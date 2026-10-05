@@ -11,11 +11,10 @@ Tracking: [milestones](https://github.com/martianmobile/backtest2live/milestones
 - **Tests + CI** — [#3](https://github.com/martianmobile/backtest2live/issues/3). pytest on Python 3.9–3.13; the core stays dependency-free.
 - **Release** — [#11](https://github.com/martianmobile/backtest2live/issues/11). Closing a milestone publishes the version to GitHub Releases and PyPI.
 
-## v0.3 — run the contract, check any engine, share the output (target mid-October 2026)
+## v0.3 — any backtest, any engine, shareable output (target mid-October 2026)
 
-Two ways in. A strategy written to the published `StrategyProtocol` contract (the format Validate accepts) runs locally with `bt2live run`. A backtest from any other engine connects through the order-log schema and its adapters.
+The toolkit checks artifacts a backtest already produces; the order-log schema is the connection to the strategy, whatever engine wrote it.
 
-- **`bt2live run`** — [#15](https://github.com/martianmobile/backtest2live/issues/15). Load a strategy package on the published contract, build its inputs from public data, simulate fills at both ends of the band (front of queue vs the `fill-gap` queue proxy) and taker fills through the published simulator. Emits order logs in the `fill-gap` schema and two equity curves.
 - **`cost-gap`** — [#16](https://github.com/martianmobile/backtest2live/issues/16). For bar-based backtests, which have no resting orders: each market order re-priced against the real book at its time, with latency. Spread, depth and latency cost vs the backtest's fill price.
 - **Schema + engine adapters** — [#7](https://github.com/martianmobile/backtest2live/issues/7). One order-log and results schema; importers for Nautilus, LEAN, backtrader, vectorbt, freqtrade, so the export is one command.
 - **Tear sheet** — [#10](https://github.com/martianmobile/backtest2live/issues/10). One shareable performance artifact with a provenance label.
@@ -26,6 +25,7 @@ Two ways in. A strategy written to the published `StrategyProtocol` contract (th
 
 ## Later (directional)
 
+- **`bt2live run`** — [#15](https://github.com/martianmobile/backtest2live/issues/15), on demand. Run a strategy written to a published strategy contract locally, with fills at both ends of the band (front of queue vs the `fill-gap` queue proxy). Built when users ask for it.
 - **`robustness`** — outlier-trade drop test, bootstrap CIs on Sharpe, parameter-perturbation sensitivity.
 - **`walk-forward`** — multi-fold rolling/anchored stability of a chosen variant.
 - **`regime`** — performance by vol/trend regime; flags strategies that only work in one.
