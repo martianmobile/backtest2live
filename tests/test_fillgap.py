@@ -175,10 +175,19 @@ def test_markdown_report(write_csv, market, capsys):
     assert "martianmobile.com/fill-autopsy?utm_source=oss" in out
 
 
-def test_off_grid_price_is_an_error(write_csv, market, capsys):
-    p = write_csv(orders(["a,1500,buy,100.05,1,4500,1"]), "orders.csv")
+def test_mostly_off_grid_prices_mean_a_wrong_tick(write_csv, market, capsys):
+    p = write_csv(orders(["a,1500,buy,100.05,1,4500,1", "b,1500,buy,100.15,1,4500,1"]), "orders.csv")
     assert cli.main(["fill-gap", p, *market]) == cli.EXIT_ERROR
-    assert "tick grid" in capsys.readouterr().err
+    assert "100.0% of order prices are not on the 0.1 tick grid" in capsys.readouterr().err
+
+
+def test_one_malformed_price_in_many_is_snapped(write_csv, market, capsys):
+    # the public archive carries the odd malformed row; one in 200 must not reject the log
+    rows = [f"o{i},1500,buy,100.0,0.001,4500,1" for i in range(199)] + ["bad,1500,buy,100.04,0.001,4500,1"]
+    cli.main(["fill-gap", write_csv(orders(rows), "orders.csv"), *market, "--json"])
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["counts"]["passive"] == 200  # 100.04 snapped to 100.0
+    assert "1 of 200 order prices off the 0.1 tick grid; snapped" in captured.err
 
 
 def test_missing_book_file_is_an_error(write_csv, capsys):
