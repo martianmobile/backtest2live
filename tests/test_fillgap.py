@@ -175,10 +175,19 @@ def test_markdown_report(write_csv, market, capsys):
     assert "martianmobile.com/fill-autopsy?utm_source=oss" in out
 
 
-def test_off_grid_price_is_an_error(write_csv, market, capsys):
-    p = write_csv(orders(["a,1500,buy,100.05,1,4500,1"]), "orders.csv")
+def test_mostly_off_grid_prices_mean_a_wrong_tick(write_csv, market, capsys):
+    p = write_csv(orders(["a,1500,buy,100.05,1,4500,1", "b,1500,buy,100.15,1,4500,1"]), "orders.csv")
     assert cli.main(["fill-gap", p, *market]) == cli.EXIT_ERROR
-    assert "tick grid" in capsys.readouterr().err
+    assert "100.0% of order prices are not on the 0.1 tick grid" in capsys.readouterr().err
+
+
+def test_one_malformed_price_in_many_is_snapped(write_csv, market, capsys):
+    # the public archive carries the odd malformed row; one in 200 must not reject the log
+    rows = [f"o{i},1500,buy,100.0,0.001,4500,1" for i in range(199)] + ["bad,1500,buy,100.04,0.001,4500,1"]
+    cli.main(["fill-gap", write_csv(orders(rows), "orders.csv"), *market, "--json"])
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["counts"]["passive"] == 200  # 100.04 snapped to 100.0
+    assert "1 of 200 order prices off the 0.1 tick grid; snapped" in captured.err
 
 
 def test_missing_book_file_is_an_error(write_csv, capsys):
@@ -231,22 +240,43 @@ def _zip_bytes(name, text):
     return buf.getvalue()
 
 
-def _archive(tmp_path, monkeypatch):
-    """A tiny synthetic bookTicker + aggTrades day in a private cache. Returns the cache root."""
+DAY_MS = 86_400_000
+
+
+def _archive(tmp_path, monkeypatch, days=(DAY,)):
+    """Tiny synthetic bookTicker + aggTrades days in a private cache (same shape each day, shifted).
+    Returns the cache root."""
     monkeypatch.setenv("BT2LIVE_CACHE", str(tmp_path / "cache"))
     base = tmp_path / "cache" / "data.binance.vision" / "data" / "futures" / "um" / "daily"
-    book = ("update_id,best_bid_price,best_bid_qty,best_ask_price,best_ask_qty,transaction_time,event_time\n"
-            f"1,100.0,5,100.1,5,{T + 1000},{T + 1000}\n"
-            f"2,100.0,1,100.1,5,{T + 86_399_900},{T + 86_399_900}\n")
-    trades = ("agg_trade_id,price,quantity,first_trade_id,last_trade_id,transact_time,is_buyer_maker\n"
-              f"1,100.0,3,1,1,{T + 2000},true\n"
-              f"2,100.0,2.5,2,2,{T + 3000},true\n"
-              f"3,100.1,1,3,3,{T + 4000},false\n")
-    for kind, text in (("bookTicker", book), ("aggTrades", trades)):
-        d = base / kind / "BTCUSDT"
-        d.mkdir(parents=True)
-        (d / f"BTCUSDT-{kind}-{DAY}.zip").write_bytes(_zip_bytes(f"BTCUSDT-{kind}-{DAY}.csv", text))
+    for day in days:
+        t0 = T - (30 - int(day[-2:])) * DAY_MS  # DAY is 2024-03-30 = T
+        book = ("update_id,best_bid_price,best_bid_qty,best_ask_price,best_ask_qty,transaction_time,event_time\n"
+                f"1,100.0,5,100.1,5,{t0 + 1000},{t0 + 1000}\n"
+                f"2,100.0,1,100.1,5,{t0 + 86_399_900},{t0 + 86_399_900}\n")
+        trades = ("agg_trade_id,price,quantity,first_trade_id,last_trade_id,transact_time,is_buyer_maker\n"
+                  f"1,100.0,3,1,1,{t0 + 2000},true\n"
+                  f"2,100.0,2.5,2,2,{t0 + 3000},true\n"
+                  f"3,100.1,1,3,3,{t0 + 4000},false\n")
+        for kind, text in (("bookTicker", book), ("aggTrades", trades)):
+            d = base / kind / "BTCUSDT"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / f"BTCUSDT-{kind}-{day}.zip").write_bytes(_zip_bytes(f"BTCUSDT-{kind}-{day}.csv", text))
     return base
+
+
+def test_off_grid_share_is_over_the_whole_log_not_per_day(tmp_path, monkeypatch, write_csv, capsys):
+    # 199 clean orders on 03-29 and one malformed price alone on 03-30: per-day it would be 100%
+    # off-grid on the light day; over the log it is 0.5%, so the row is snapped and the run proceeds.
+    _archive(tmp_path, monkeypatch, days=("2024-03-29", DAY))
+    t29 = T - DAY_MS
+    rows = [f"o{i},{t29 + 1500},buy,100.0,0.001,{t29 + 4500},1" for i in range(199)]
+    rows.append(f"bad,{T + 1500},buy,100.04,0.001,{T + 4500},1")
+    p = write_csv("order_id,ts,side,price,size,end_ts,filled\n" + "\n".join(rows) + "\n", "orders.csv")
+    rc = cli.main(["fill-gap", p, "--venue", "binance-um", "--pair", "BTCUSDT", "--offline", "--json"])
+    captured = capsys.readouterr()
+    assert rc in (0, 1)
+    assert json.loads(captured.out)["counts"]["passive"] == 200
+    assert captured.err.count("snapped") == 1  # checked once, not once per day
 
 
 def test_load_binance_um_parses_archive(tmp_path, monkeypatch):
