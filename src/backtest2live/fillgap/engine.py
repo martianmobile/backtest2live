@@ -32,7 +32,7 @@ def _check_grid(orders, tick, log):
         f"snapped to the nearest tick")
 
 
-def _run_chunk(book, trades, orders, idx, tick, latency_us, log=print):
+def _run_chunk(book, trades, orders, idx, tick, latency_us):
     b = {"t": book["t"], "bid_px": _ticks(book["bid_px"], tick), "ask_px": _ticks(book["ask_px"], tick),
          "bid_qty": book["bid_qty"], "ask_qty": book["ask_qty"]}
     tr = {"t": trades["t"], "px": _ticks(trades["px"], tick), "qty": trades["qty"],
@@ -74,7 +74,7 @@ def evaluate(args, log=print):
         book, trades = data.load_user_book(args.book), data.load_user_trades(args.trades)
         tick = tick or data.infer_tick(book)
         _check_grid(orders, tick, log)
-        put(np.arange(n), _run_chunk(book, trades, orders, np.arange(n), tick, latency_us, log))
+        put(np.arange(n), _run_chunk(book, trades, orders, np.arange(n), tick, latency_us))
         source = f"your files ({os.path.basename(args.book)}, {os.path.basename(args.trades)})"
     else:
         pair = args.pair.upper()
@@ -89,7 +89,7 @@ def evaluate(args, log=print):
             if tick is None:
                 tick = data.infer_tick(book)
                 _check_grid(orders, tick, log)  # whole log, not this day's slice
-            put(idx, _run_chunk(book, trades, orders, idx, tick, latency_us, log))
+            put(idx, _run_chunk(book, trades, orders, idx, tick, latency_us))
         source = f"Binance USDT-M futures public archive, {pair}"
 
     return aggregate(orders, out, args, tick, source)
