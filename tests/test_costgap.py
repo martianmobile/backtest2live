@@ -102,6 +102,24 @@ def test_pnl_verdict(write_csv, book, capsys):
     assert d["verdict"] == "CONSISTENT" and rc == 0
 
 
+def test_untyped_price_column_is_the_booked_fill(write_csv, book, capsys):
+    # a bar backtest's export: price = the fill it booked, no type column -> all market, price = baseline
+    p = write_csv(f"ts,side,size,price\n{T + 2000},buy,1,100.05\n", "o.csv")
+    rc = cli.main(["cost-gap", p, *book, "--json"])
+    captured = capsys.readouterr()
+    d = json.loads(captured.out)
+    assert d["counts"]["taker"] == 1 and d["counts"]["resting"] == 0
+    assert d["cost_bps"]["mean"] == pytest.approx((100.1 - 100.05) / 100.05 * 1e4, rel=1e-6)
+    assert "reading 'price' as the price the backtest booked" in captured.err
+
+
+def test_typed_or_paired_price_column_is_a_limit(write_csv, book, capsys):
+    # with fill_price alongside, price is a limit: 100.0 buy rests
+    p = write_csv(f"ts,side,size,price,fill_price\n{T + 2000},buy,1,100.0,100.05\n", "o.csv")
+    rc, d = run(capsys, p, book)
+    assert d["counts"]["resting"] == 1 and d["counts"]["taker"] == 0
+
+
 def test_no_price_column_means_all_market(write_csv, book, capsys):
     p = write_csv(f"ts,side,size\n{T + 2000},buy,1\n{T + 2000},sell,1\n", "o.csv")
     rc, d = run(capsys, p, book)

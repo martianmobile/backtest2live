@@ -112,7 +112,7 @@ That example is a toy momentum strategy sending 0.1 BTC market orders every minu
 
 ### Your order log
 
-Same columns as `fill-gap`, with three additions: `type` (`market`/`limit`; a log with no `price` column is treated as all market orders), `price` for limits (a limit that crosses the touch is priced as a taker and capped at its limit; one that rests is counted and left to `fill-gap`), and `fill_price`, the price the backtest booked (without it, the mid at arrival is the baseline).
+Same columns as `fill-gap`, with three additions: `type` (`market`/`limit`), `price` for limits (a limit that crosses the touch is priced as a taker and capped at its limit; one that rests is counted and left to `fill-gap`), and `fill_price`, the price the backtest booked (without it, the mid at arrival is the baseline). A log with no `price` column is all market orders. A log with a `price` column but no `type` and no `fill_price` is read as a bar backtest's export: the price is the booked fill, every order is a market order, and the run says so.
 
 ### What the book can and cannot see
 

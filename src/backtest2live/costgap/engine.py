@@ -26,7 +26,7 @@ MARKET_WORDS = {"market", "mkt", "m"}
 LIMIT_WORDS = {"limit", "lmt", "l"}
 
 
-def load_orders(path):
+def load_orders(path, log=print):
     df = data._read_csv(path, "order log")
     c = data._resolve(df, ALIASES, ("t", "side", "size"), "order log")
     side = df[c["side"]].astype(str).str.strip().str.lower()
@@ -48,6 +48,13 @@ def load_orders(path):
         limit = np.where(is_market, np.nan, limit)
         if (~is_market & ~np.isfinite(limit)).any():
             raise SystemExit("error: a limit order needs a price")
+    elif "px" in c and "fill_px" not in c:
+        # Untyped log with one price column: a bar backtest's export, where the price is the
+        # fill it booked, not a limit. Read it as the baseline and treat every order as market.
+        log(f"cost-gap: no 'type' column; reading {c['px']!r} as the price the backtest booked "
+            f"(all orders priced as market). If it is a limit price, add a 'type' column.")
+        c["fill_px"] = c.pop("px")
+        limit = np.full(n, np.nan)
     elif not np.isfinite(limit).any() and "px" in c:
         raise SystemExit(f"error: column {c['px']!r} has no numeric prices")
 
@@ -85,7 +92,7 @@ def evaluate(args, log=print):
     if args.venue and not args.pair:
         raise SystemExit("error: --venue needs --pair (e.g. --pair BTCUSDT)")
 
-    orders = load_orders(args.orders)
+    orders = load_orders(args.orders, log)
     n = len(orders["t"])
     latency_us = int(round(args.latency_ms * 1000))
     tick = args.tick
