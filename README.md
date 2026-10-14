@@ -16,6 +16,7 @@ This is the public, MIT-licensed version of checks used in live crypto trading r
 |---------|--------|--------------|
 | **`bt2live convergence`** | shipped | Read a variant parameter sweep → measure dispersion, IS/OOS rank stability, and parameter-plateau structure → verdict: **CONVERGED / ITERATE / KILL**. |
 | **`bt2live fill-gap`** | shipped | Re-run your backtest's resting orders under a queue proxy on top-of-book and trades → your fill rate vs the proxy's: **CONSISTENT / OVERSTATED**. |
+| **`bt2live cost-gap`** | shipped | Re-price your backtest's taker orders (market, or limits that cross) on top-of-book at arrival, with latency → what they would have paid vs what the backtest booked: **CONSISTENT / OVERSTATED**. The check for bar-based backtests. |
 
 Roadmap: [ROADMAP.md](ROADMAP.md) and the [milestones](https://github.com/martianmobile/backtest2live/milestones).
 
@@ -79,7 +80,7 @@ CSV, one row per order. Column names are matched case-insensitively:
 | P&L | `pnl` | no |
 | id | `order_id` | no |
 
-Orders marketable at arrival are taker orders and are skipped. `--latency-ms` delays every order's arrival at the book.
+Orders marketable at arrival are taker orders: `fill-gap` skips them and `cost-gap` prices them. `--latency-ms` delays every order's arrival at the book.
 
 ### Market data
 
@@ -89,6 +90,33 @@ Orders marketable at arrival are taker orders and are skipped. `--latency-ms` de
 ### What the proxy cannot see
 
 The touch rule is an upper bound: a resting order fills only if something trades at or through its price. The proxy is an estimate below it. Hidden size, your latency and your own impact make it too generous. Cancels ahead of you, and a queue position read from the size shown when the price reached you, make it too strict. How that nets out depends on venue, size and regime. Only your own live fills settle it; [Martian Mobile](https://martianmobile.com/fill-autopsy?utm_source=github&utm_medium=readme&utm_campaign=fill-gap) runs that check against live fills.
+
+---
+
+## `cost-gap`: what would your taker orders have paid?
+
+A bar-based backtest fills every order at a bar price: the close, the open, or the mid. A real market order crosses the spread, eats whatever is displayed at the touch, and arrives some milliseconds after the book you saw. `cost-gap` re-prices each market order, and each limit that crosses the spread, against top-of-book at its arrival time and reports the cost against the price the backtest booked.
+
+```bash
+bt2live cost-gap examples/market_orders_btcusdt_2024-03-30.csv --venue binance-um --pair BTCUSDT
+```
+
+```
+## Verdict: REPORTED
+
+**Your backtest's 1,435 taker orders would have paid +0.01 bps on average
+(+0.01 bps median) against the price it booked.**
+```
+
+That example is a toy momentum strategy sending 0.1 BTC market orders every minute and booking the mid. On BTCUSDT perpetuals the half-spread is under 0.01 bps and the touch absorbs 0.1 BTC, so the mid-fill assumption holds there, and the report says so. The check bites on thinner pairs, larger sizes and slower paths: the latency table (0 / 5 / 20 / 100 ms) shows the slope, and the by-volatility table shows where it concentrates. With a `pnl` column the verdict is **OVERSTATED** when the cost removes more than `--tolerance` (default 25%) of the backtest's P&L; without one it is **REPORTED**. Exit code: `0` CONSISTENT or REPORTED, `1` OVERSTATED, `3` error.
+
+### Your order log
+
+Same columns as `fill-gap`, with three additions: `type` (`market`/`limit`), `price` for limits (a limit that crosses the touch is priced as a taker and capped at its limit; one that rests is counted and left to `fill-gap`), and `fill_price`, the price the backtest booked (without it, the mid at arrival is the baseline). A log with no `price` column is all market orders. A log with a `price` column but no `type` and no `fill_price` is read as a bar backtest's export: the price is the booked fill, every order is a market order, and the run says so.
+
+### What the book can and cannot see
+
+Top-of-book shows the touch and its displayed size, nothing behind it. Size beyond the touch is priced one tick worse per displayed-size slice, the least impact consistent with the feed, so the cost is a floor, not a measurement. Only your own live fills settle it.
 
 ---
 

@@ -18,3 +18,17 @@ def write_csv(tmp_path):
         return str(p)
 
     return _write
+
+
+T = 1_711_756_800_000  # 2024-03-30T00:00:00Z in ms; synthetic fixtures use offsets from it
+
+
+def abs_ms(text):
+    """Turn leading 'ts' offsets in a CSV block into epoch ms."""
+    out = []
+    for line in text.strip().splitlines():
+        cells = line.split(",")
+        if cells[0].isdigit():
+            cells[0] = str(T + int(cells[0]))
+        out.append(",".join(cells))
+    return "\n".join(out)
