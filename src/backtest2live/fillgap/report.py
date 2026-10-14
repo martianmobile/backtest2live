@@ -44,7 +44,7 @@ def markdown(res):
     L.append(f"| Queue proxy | {c['proxy_fills']:,} | {_pct(r['proxy'])} |")
     L += ["",
           f"Rates are over {c['passive']:,} resting orders. Skipped: {c['marketable']:,} marketable at arrival "
-          f"(taker orders, out of scope) and {c['no_data']:,} outside the market data. "
+          f"(taker orders: price them with `bt2live cost-gap`) and {c['no_data']:,} outside the market data. "
           f"{c['never_reached']:,} rested behind the touch and the price never came to them.", ""]
     mt = res["median_time_to_fill_s"]
     L.append(f"Median time to fill: {_secs(mt['touch'])} at touch, {_secs(mt['proxy'])} under the proxy.")
