@@ -113,6 +113,12 @@ def test_untyped_price_column_is_the_booked_fill(write_csv, book, capsys):
     assert "reading 'price' as the price the backtest booked" in captured.err
 
 
+def test_explicit_limit_column_stays_a_limit(write_csv, book, capsys):
+    p = write_csv(f"ts,side,size,limit_price\n{T + 2000},buy,1,100.0\n", "o.csv")
+    rc, d = run(capsys, p, book)
+    assert d["counts"]["resting"] == 1 and d["counts"]["taker"] == 0
+
+
 def test_typed_or_paired_price_column_is_a_limit(write_csv, book, capsys):
     # with fill_price alongside, price is a limit: 100.0 buy rests
     p = write_csv(f"ts,side,size,price,fill_price\n{T + 2000},buy,1,100.0,100.05\n", "o.csv")

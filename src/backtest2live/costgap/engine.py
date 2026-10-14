@@ -48,7 +48,7 @@ def load_orders(path, log=print):
         limit = np.where(is_market, np.nan, limit)
         if (~is_market & ~np.isfinite(limit)).any():
             raise SystemExit("error: a limit order needs a price")
-    elif "px" in c and "fill_px" not in c:
+    elif "px" in c and "fill_px" not in c and c["px"].lower().strip() in ("price", "px"):
         # Untyped log with one price column: a bar backtest's export, where the price is the
         # fill it booked, not a limit. Read it as the baseline and treat every order as market.
         log(f"cost-gap: no 'type' column; reading {c['px']!r} as the price the backtest booked "

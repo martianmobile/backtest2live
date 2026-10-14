@@ -20,7 +20,8 @@ LATENCY_SWEEP_MS = (0.0, 5.0, 20.0, 100.0)
 
 def add_arguments(p):
     p.add_argument("orders", help="Your backtest's order log (CSV): time, side, size, and optionally type "
-                                  "(market/limit), price (the limit), fill_price (what the backtest booked), pnl.")
+                                  "(market/limit), price (the limit; with no type or fill_price, the booked fill), "
+                                  "fill_price (what the backtest booked), pnl.")
     src = p.add_argument_group("market data (pick one)")
     src.add_argument("--venue", choices=VENUES,
                      help="Download public data: binance-um = Binance USDT-M futures archive "

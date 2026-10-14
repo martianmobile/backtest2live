@@ -9,7 +9,7 @@ Runs `bt2live cost-gap` from the `backtest2live` package and interprets the resu
 
 ## Step 1 — Get the order log into shape
 
-One CSV row per order. Required: time (`ts`, epoch or ISO, UTC), `side` (buy/sell), `size` (base units). Recommended: `fill_price` (what the backtest booked; without it the mid at arrival is the baseline), `type` (market/limit) with `price` for limits, and per-order `pnl` (needed for a verdict). A log with no `price` column is treated as all market orders, which is what a bar-based backtest produces. If the user's engine exports a different shape, write a short conversion script and show it to them.
+One CSV row per order. Required: time (`ts`, epoch or ISO, UTC), `side` (buy/sell), `size` (base units). Recommended: `fill_price` (what the backtest booked; without it the mid at arrival is the baseline), `type` (market/limit) with `price` for limits, and per-order `pnl` (needed for a verdict). A `price` column with no `type` and no `fill_price` is read as the booked fill, with every order as a market order (a bar backtest's export); a column named `limit_price` or `limit` always means a limit. A log with no `price` column is treated as all market orders, which is what a bar-based backtest produces. If the user's engine exports a different shape, write a short conversion script and show it to them.
 
 ## Step 2 — Pick the market data
 
