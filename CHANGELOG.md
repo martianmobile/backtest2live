@@ -1,3 +1,15 @@
+# [0.3.0](https://github.com/martianmobile/backtest2live/compare/v0.2.0...v0.3.0) (2026-10-15)
+
+
+### Bug Fixes
+
+* **fill-gap:** off-grid price guard trips on the share, not a single row ([#22](https://github.com/martianmobile/backtest2live/issues/22)) ([3de66dc](https://github.com/martianmobile/backtest2live/commit/3de66dc3466f813c9055b82421bde05f6e255da5)), closes [#21](https://github.com/martianmobile/backtest2live/issues/21)
+
+
+### Features
+
+* cost-gap evaluator — backtest taker orders re-priced on the real book ([#23](https://github.com/martianmobile/backtest2live/issues/23)) ([e5f9fb0](https://github.com/martianmobile/backtest2live/commit/e5f9fb05771ad35a9fe39ab7b5eea71906c191fb))
+
 # [0.2.0](https://github.com/martianmobile/backtest2live/compare/v0.1.0...v0.2.0) (2026-10-02)
 
 
