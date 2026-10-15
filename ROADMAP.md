@@ -15,7 +15,7 @@ Tracking: [milestones](https://github.com/martianmobile/backtest2live/milestones
 
 The toolkit checks artifacts a backtest already produces; the order-log schema is the connection to the strategy, whatever engine wrote it.
 
-- **`cost-gap`** — [#16](https://github.com/martianmobile/backtest2live/issues/16). For bar-based backtests, which have no resting orders: each market order re-priced against the real book at its time, with latency. Spread, depth and latency cost vs the backtest's fill price.
+- **`cost-gap`** — [#16](https://github.com/martianmobile/backtest2live/issues/16), shipped (0.3.0). For bar-based backtests, which have no resting orders: each market order re-priced against the real book at its time, with latency. Spread, depth and latency cost vs the backtest's fill price.
 - **Schema + engine adapters** — [#7](https://github.com/martianmobile/backtest2live/issues/7). One order-log and results schema; importers for Nautilus, LEAN, backtrader, vectorbt, freqtrade, so the export is one command.
 - **Tear sheet** — [#10](https://github.com/martianmobile/backtest2live/issues/10). One shareable performance artifact with a provenance label.
 - **MCP server** — [#8](https://github.com/martianmobile/backtest2live/issues/8). The checks, exposed to any AI assistant.
