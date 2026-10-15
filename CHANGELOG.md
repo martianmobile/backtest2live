@@ -1,3 +1,10 @@
+# [0.4.0](https://github.com/martianmobile/backtest2live/compare/v0.3.0...v0.4.0) (2026-10-15)
+
+
+### Features
+
+* Bybit public L2 archive as a venue; OKX and Bybit L2 day files via --l2 ([#27](https://github.com/martianmobile/backtest2live/issues/27)) ([7fe3b8d](https://github.com/martianmobile/backtest2live/commit/7fe3b8dfe7fb0d9835d15b9d18584746bb807164)), closes [#26](https://github.com/martianmobile/backtest2live/issues/26) [#28](https://github.com/martianmobile/backtest2live/issues/28) [#24](https://github.com/martianmobile/backtest2live/issues/24)
+
 # [0.3.0](https://github.com/martianmobile/backtest2live/compare/v0.2.0...v0.3.0) (2026-10-15)
 
 
