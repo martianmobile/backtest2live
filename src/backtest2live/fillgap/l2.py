@@ -6,6 +6,8 @@ Two newline-JSON day-file formats are recognised per line:
   ``{"type": "snapshot"|"delta", "ts": ms, "data": {"b": [[px, sz], ...], "a": [...]}}``
 - OKX historical-data portal ``books`` stream:
   ``{"action": "snapshot"|"update", "ts": ms, "bids": [[px, sz, ...], ...], "asks": [...]}``
+- A sampled-snapshot CSV ``timestamp,bids,asks`` (ms, JSON level lists), the shape our own
+  converter writes from an OKX ``books`` file; each row is a full snapshot.
 
 A level with size 0 is removed. One row is emitted whenever the best bid or
 ask (price or displayed size) changes, which is the bookTicker shape the
@@ -38,6 +40,19 @@ def _open_lines(path):
                 yield line
 
 
+def _csv_snapshots(lines):
+    """Rows of a ``timestamp,bids,asks`` CSV → (ts_ms, True, bids, asks)."""
+    import csv
+    reader = csv.reader(lines)
+    header = next(reader, None)
+    if not header or [h.strip().lower() for h in header[:3]] != ["timestamp", "bids", "asks"]:
+        raise SystemExit("error: L2 CSV must have the columns timestamp,bids,asks")
+    for row in reader:
+        if len(row) < 3:
+            continue
+        yield int(float(row[0])), True, json.loads(row[1]), json.loads(row[2])
+
+
 def _event(obj):
     """Normalise one message to (ts_ms, is_snapshot, bids, asks) or None."""
     if "data" in obj and "topic" in obj:                      # Bybit
@@ -57,14 +72,20 @@ def replay_l1(lines):
     best_b = best_a = None
     rows_t, rows = [], []
     last = None
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        ev = _event(json.loads(line))
-        if ev is None:
-            continue
-        ts, snap, b_lv, a_lv = ev
+    lines = iter(lines)
+    first = next(lines, "")
+    if first.lstrip().lower().startswith("timestamp,"):
+        events = _csv_snapshots([first] + list(lines))
+    else:
+        def _json_events(src):
+            for line in src:
+                line = line.strip()
+                if line:
+                    ev = _event(json.loads(line))
+                    if ev is not None:
+                        yield ev
+        events = _json_events([first] + list(lines))
+    for ts, snap, b_lv, a_lv in events:
         if snap:
             bids = {float(p): float(s) for p, s, *_ in b_lv if float(s) > 0}
             asks = {float(p): float(s) for p, s, *_ in a_lv if float(s) > 0}

@@ -413,3 +413,12 @@ def test_book_and_l2_together_is_an_error(write_csv, market, capsys):
     p = write_csv(orders(["a,1500,buy,100.0,0.1,4500,1"]), "orders.csv")
     assert cli.main(["fill-gap", p, *market, "--l2", "x.data"]) == cli.EXIT_ERROR
     assert "not both" in capsys.readouterr().err
+
+
+def test_replay_snapshot_csv():
+    rows = ["timestamp,bids,asks",
+            f'{T + 1000},"[[""100.0"", ""5""], [""99.9"", ""2""]]","[[""100.1"", ""3""]]"',
+            f'{T + 2000},"[[""100.0"", ""5""], [""99.9"", ""2""]]","[[""100.1"", ""3""]]"',   # unchanged top: no row
+            f'{T + 3000},"[[""100.05"", ""1""], [""100.0"", ""5""]]","[[""100.1"", ""3""]]"']
+    b = l2.replay_l1(rows)
+    assert list(b["bid_px"]) == [100.0, 100.05] and list(b["t"]) == [(T + 1000) * 1000, (T + 3000) * 1000]
