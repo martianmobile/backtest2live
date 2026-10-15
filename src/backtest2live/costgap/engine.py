@@ -92,6 +92,8 @@ def evaluate(args, log=print):
         raise SystemExit("error: pass either --venue with --pair, or --book / --l2")
     if args.venue and not args.pair:
         raise SystemExit("error: --venue needs --pair (e.g. --pair BTCUSDT)")
+    if args.book and getattr(args, "l2", None):
+        raise SystemExit("error: pass --book or --l2, not both")
 
     orders = load_orders(args.orders, log)
     n = len(orders["t"])

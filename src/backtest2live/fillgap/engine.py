@@ -52,6 +52,8 @@ def evaluate(args, log=print):
         raise SystemExit("error: pass either --venue with --pair, or your own data (--book or --l2, with --trades)")
     if args.venue and not args.pair:
         raise SystemExit("error: --venue needs --pair (e.g. --pair BTCUSDT)")
+    if args.book and getattr(args, "l2", None):
+        raise SystemExit("error: pass --book or --l2, not both")
     if own and not ((args.book or getattr(args, "l2", None)) and args.trades):
         raise SystemExit("error: --book (or --l2) and --trades go together")
 

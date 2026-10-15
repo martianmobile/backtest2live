@@ -112,5 +112,7 @@ def l1_from_file(path, cache_path=None, log=print):
     book = replay_l1(_open_lines(path))
     if cache_path:
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-        np.savez(cache_path, **book)
+        tmp = cache_path + ".part.npz"
+        np.savez(tmp, **book)
+        os.replace(tmp, cache_path)  # atomic: a killed run never leaves a half-written cache
     return book

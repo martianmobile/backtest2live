@@ -406,4 +406,10 @@ def test_bybit_venue_offline(tmp_path, monkeypatch, write_csv, capsys):
     assert d["counts"]["proxy_fills"] == 1
     assert d["source"].startswith("Bybit linear")
     # replay cached as .npz next to the archive file
-    assert list((tmp_path / "cache" / "bybit" / "orderbook" / "linear" / "BTCUSDT").glob("*.l1.npz"))
+    assert list((tmp_path / "cache" / "bybit" / "orderbook" / "linear" / "BTCUSDT").glob("*.l1v1.npz"))
+
+
+def test_book_and_l2_together_is_an_error(write_csv, market, capsys):
+    p = write_csv(orders(["a,1500,buy,100.0,0.1,4500,1"]), "orders.csv")
+    assert cli.main(["fill-gap", p, *market, "--l2", "x.data"]) == cli.EXIT_ERROR
+    assert "not both" in capsys.readouterr().err

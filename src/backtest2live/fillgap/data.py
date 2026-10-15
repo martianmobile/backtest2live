@@ -293,8 +293,6 @@ def infer_tick(book):
 
 BYBIT_BOOK_ROOT = "https://quote-saver.bycsi.com/orderbook"
 BYBIT_TRADES_ROOT = "https://public.bybit.com/trading"
-VENUES = ("binance-um", "bybit-linear", "bybit-inverse")
-
 
 def _download(url, path, offline, log):
     """Fetch url to path unless cached. No checksum: the publisher does not provide one."""
@@ -342,7 +340,7 @@ def load_bybit(category, pair, days, offline=False, log=print):
     books, trades = [], []
     for d in days:
         bf = _bybit_book_file(category, pair, d, offline, log)
-        books.append(l2.l1_from_file(bf, cache_path=bf + ".l1.npz", log=log))
+        books.append(l2.l1_from_file(bf, cache_path=bf + ".l1v1.npz", log=log))
         tname = f"{pair}{d.isoformat()}.csv.gz"
         tf = _download(f"{BYBIT_TRADES_ROOT}/{pair}/{tname}",
                        os.path.join(cache_dir(), "bybit", "trading", pair, tname), offline, log)
