@@ -91,7 +91,7 @@ Orders marketable at arrival are taker orders: `fill-gap` skips them and `cost-g
 | Your own L2 day file | `--l2 FILE [FILE …]` | an unpacked OKX historical-data portal `books` file (newline JSON, snapshot then updates), a Bybit `ob*.data(.zip)` file, or a sampled-snapshot CSV `timestamp,bids,asks` with JSON level lists; any date | — |
 | Your own top-of-book | `--book l1.csv` | `ts, bid_px, bid_qty, ask_px, ask_qty`, every change of the best bid/ask; any venue, any date | — |
 
-Downloads are cached under `~/.cache/backtest2live` (`BT2LIVE_CACHE` overrides); Binance files are checked against the published SHA-256. An L2 replay is cached next to its file, so a day is replayed once (about 10 s for a Bybit BTCUSDT day). `fill-gap` also needs trades: `--venue` fetches them; with `--book`/`--l2` pass `--trades trades.csv` (`ts, price, qty` plus `is_buyer_maker`, true when a seller hit the bid, or the taker's `side`; OKX and Bybit trade exports work as is).
+Downloads are cached under `~/.cache/backtest2live` (`BT2LIVE_CACHE` overrides); Binance files are checked against the published SHA-256. A downloaded day's L2 replay is cached next to it, so it is replayed once (about 10 s for a Bybit BTCUSDT day); files passed with `--l2` are replayed on each run. `fill-gap` also needs trades: `--venue` fetches them; with `--book`/`--l2` pass `--trades trades.csv` (`ts, price, qty` plus `is_buyer_maker`, true when a seller hit the bid, or the taker's `side`; OKX and Bybit trade exports work as is).
 
 ### What the proxy cannot see
 
