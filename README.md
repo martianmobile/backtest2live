@@ -84,8 +84,14 @@ Orders marketable at arrival are taker orders: `fill-gap` skips them and `cost-g
 
 ### Market data
 
-- **`--venue binance-um --pair BTCUSDT`** downloads Binance's public USDT-M futures archive (`bookTicker` + `aggTrades`) for the days your orders cover, checks the published SHA-256, and caches it under `~/.cache/backtest2live` (`BT2LIVE_CACHE` overrides). About 100 MB per day for BTCUSDT. Binance stopped publishing `bookTicker` after **2024-03-30**, so this source covers orders up to that day.
-- **`--book l1.csv --trades trades.csv`** uses your own recorded data, any venue and any date. Book: `ts, bid_px, bid_qty, ask_px, ask_qty` (every change of the best bid/ask). Trades: `ts, price, qty` plus `is_buyer_maker` (true when a seller hit the bid) or the taker's `side`.
+| Source | Flag | Covers | Size |
+|---|---|---|---|
+| Binance USDT-M futures public archive | `--venue binance-um --pair BTCUSDT` | `bookTicker` + `aggTrades`, up to **2024-03-30** (Binance stopped publishing top-of-book after that) | ~100 MB/day |
+| Bybit perpetuals public archive | `--venue bybit-linear --pair BTCUSDT` (or `bybit-inverse`) | L2 order book (snapshot + deltas, replayed to top-of-book) + trades, **2023 to yesterday** | 75–215 MB/day book, ~50 MB/day trades |
+| Your own L2 day file | `--l2 FILE [FILE …]` | OKX historical-data portal `books` files, Bybit `ob*.data(.zip)` files, or anything in those shapes; any date | — |
+| Your own top-of-book | `--book l1.csv` | `ts, bid_px, bid_qty, ask_px, ask_qty`, every change of the best bid/ask; any venue, any date | — |
+
+Downloads are cached under `~/.cache/backtest2live` (`BT2LIVE_CACHE` overrides); Binance files are checked against the published SHA-256. An L2 replay is cached next to its file, so a day is replayed once (about 10 s for a Bybit BTCUSDT day). `fill-gap` also needs trades: `--venue` fetches them; with `--book`/`--l2` pass `--trades trades.csv` (`ts, price, qty` plus `is_buyer_maker`, true when a seller hit the bid, or the taker's `side`; OKX and Bybit trade exports work as is).
 
 ### What the proxy cannot see
 
