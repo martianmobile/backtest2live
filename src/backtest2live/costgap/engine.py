@@ -87,8 +87,9 @@ def _price(book, orders, idx, tick, latency_us):
 
 
 def evaluate(args, log=print):
-    if bool(args.venue) == bool(args.book):
-        raise SystemExit("error: pass either --venue with --pair, or --book")
+    own = bool(args.book or getattr(args, "l2", None))
+    if bool(args.venue) == own:
+        raise SystemExit("error: pass either --venue with --pair, or --book / --l2")
     if args.venue and not args.pair:
         raise SystemExit("error: --venue needs --pair (e.g. --pair BTCUSDT)")
 
@@ -111,11 +112,14 @@ def evaluate(args, log=print):
         for ms in LATENCY_SWEEP_MS:
             sweep[ms][idx] = r["sweep"][ms]
 
-    if args.book:
-        book = data.load_user_book(args.book)
+    if not args.venue:
+        if args.book:
+            book, bname = data.load_user_book(args.book), os.path.basename(args.book)
+        else:
+            book, bname = data.load_l2_files(args.l2, log=log), ", ".join(os.path.basename(f) for f in args.l2)
         tick = tick or data.infer_tick(book)
         put(np.arange(n), _price(book, orders, np.arange(n), tick, latency_us))
-        source = f"your file ({os.path.basename(args.book)})"
+        source = f"your file ({bname})"
     else:
         pair = args.pair.upper()
         t_arr = orders["t"] + latency_us
@@ -123,10 +127,10 @@ def evaluate(args, log=print):
         for d in np.unique(day_of):
             idx = np.flatnonzero(day_of == d)
             days = data.utc_days(int(t_arr[idx].min()), int(t_arr[idx].max()) + int(max(LATENCY_SWEEP_MS)) * 1000)
-            book, _ = data.load_binance_um(pair, days, offline=args.offline, log=log)
+            book, _ = data.load_venue(args.venue, pair, days, offline=args.offline, log=log)
             tick = tick or data.infer_tick(book)
             put(idx, _price(book, orders, idx, tick, latency_us))
-        source = f"Binance USDT-M futures public archive, {pair}"
+        source = data.venue_source(args.venue, pair)
 
     return aggregate(orders, out, sweep, args, tick, source)
 

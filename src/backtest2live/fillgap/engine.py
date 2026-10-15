@@ -47,12 +47,13 @@ def _run_chunk(book, trades, orders, idx, tick, latency_us):
 
 
 def evaluate(args, log=print):
-    if bool(args.venue) == bool(args.book or args.trades):
-        raise SystemExit("error: pass either --venue with --pair, or --book with --trades")
+    own = bool(args.book or getattr(args, "l2", None) or args.trades)
+    if bool(args.venue) == own:
+        raise SystemExit("error: pass either --venue with --pair, or your own data (--book or --l2, with --trades)")
     if args.venue and not args.pair:
         raise SystemExit("error: --venue needs --pair (e.g. --pair BTCUSDT)")
-    if (args.book or args.trades) and not (args.book and args.trades):
-        raise SystemExit("error: --book and --trades go together")
+    if own and not ((args.book or getattr(args, "l2", None)) and args.trades):
+        raise SystemExit("error: --book (or --l2) and --trades go together")
 
     orders = data.load_orders(args.orders, args.max_rest)
     n = len(orders["t"])
@@ -70,12 +71,16 @@ def evaluate(args, log=print):
                     out[k][:] = -1 if r[k].dtype.kind == "i" else np.nan
             out[k][idx] = r[k]
 
-    if args.book:
-        book, trades = data.load_user_book(args.book), data.load_user_trades(args.trades)
+    if not args.venue:
+        if args.book:
+            book, bname = data.load_user_book(args.book), os.path.basename(args.book)
+        else:
+            book, bname = data.load_l2_files(args.l2, log=log), ", ".join(os.path.basename(f) for f in args.l2)
+        trades = data.load_user_trades(args.trades)
         tick = tick or data.infer_tick(book)
         _check_grid(orders, tick, log)
         put(np.arange(n), _run_chunk(book, trades, orders, np.arange(n), tick, latency_us))
-        source = f"your files ({os.path.basename(args.book)}, {os.path.basename(args.trades)})"
+        source = f"your files ({bname}, {os.path.basename(args.trades)})"
     else:
         pair = args.pair.upper()
         t_arr = orders["t"] + latency_us
@@ -85,12 +90,12 @@ def evaluate(args, log=print):
         for d in np.unique(day_of):
             idx = np.flatnonzero(day_of == d)
             days = data.utc_days(int(t_arr[idx].min()), int(orders["t_end"][idx].max()))
-            book, trades = data.load_binance_um(pair, days, offline=args.offline, log=log)
+            book, trades = data.load_venue(args.venue, pair, days, offline=args.offline, log=log)
             if tick is None:
                 tick = data.infer_tick(book)
                 _check_grid(orders, tick, log)  # whole log, not this day's slice
             put(idx, _run_chunk(book, trades, orders, idx, tick, latency_us))
-        source = f"Binance USDT-M futures public archive, {pair}"
+        source = data.venue_source(args.venue, pair)
 
     return aggregate(orders, out, args, tick, source)
 
