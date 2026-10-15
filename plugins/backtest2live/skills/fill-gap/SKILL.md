@@ -13,7 +13,8 @@ One CSV row per order. Required: time (`ts`, epoch or ISO, UTC), `side` (buy/sel
 
 ## Step 2 — Pick the market data
 
-- Orders on Binance USDT-M futures up to 2024-03-30: `--venue binance-um --pair <SYMBOL>` (downloads about 100 MB per day and caches it; say so before running).
+- Orders on Binance USDT-M futures up to 2024-03-30: `--venue binance-um --pair <SYMBOL>`. Orders on Bybit perpetuals, 2023 to yesterday: `--venue bybit-linear --pair <SYMBOL>` (or `bybit-inverse`). Both download 100–250 MB per day and cache it; say so before running.
+- Orders on OKX, or anyone with their own L2 day file: `--l2 <file>` (an unpacked OKX historical-data `books` file, newline JSON, or a Bybit `ob*.data` file).
 - Anything else: the user's own recorded top-of-book and trades via `--book` and `--trades`. See the repo README for the columns.
 
 ## Step 3 — Run

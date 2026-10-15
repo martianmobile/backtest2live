@@ -12,7 +12,7 @@ working on a bare Python install.
 import sys
 
 SCHEMA = "backtest2live.cost-gap/1"
-VENUES = ("binance-um",)
+VENUES = ("binance-um", "bybit-linear", "bybit-inverse")
 CTA_URL = "https://martianmobile.com/fill-autopsy?utm_source=oss&utm_medium=cli&utm_campaign=cost-gap"
 VERDICT_EXIT = {"CONSISTENT": 0, "REPORTED": 0, "OVERSTATED": 1}
 LATENCY_SWEEP_MS = (0.0, 5.0, 20.0, 100.0)
@@ -24,10 +24,12 @@ def add_arguments(p):
                                   "fill_price (what the backtest booked), pnl.")
     src = p.add_argument_group("market data (pick one)")
     src.add_argument("--venue", choices=VENUES,
-                     help="Download public data: binance-um = Binance USDT-M futures archive "
-                          "(bookTicker ends 2024-03-30)")
+                     help="Download public data: binance-um = Binance USDT-M futures (bookTicker ends 2024-03-30); "
+                          "bybit-linear / bybit-inverse = Bybit perpetuals L2 archive (2023 to yesterday)")
     src.add_argument("--pair", help="Symbol for --venue, e.g. BTCUSDT")
     src.add_argument("--book", help="Your own top-of-book CSV: ts, bid_px, bid_qty, ask_px, ask_qty")
+    src.add_argument("--l2", nargs="+", metavar="FILE",
+                     help="Your own L2 day file(s) instead of --book: OKX historical-data 'books' or Bybit ob*.data(.zip)")
     p.add_argument("--latency-ms", type=float, default=0.0,
                    help="Delay each order's arrival at the book by this much (default 0); the report "
                         "also shows the mean cost at 0, 5, 20 and 100 ms")

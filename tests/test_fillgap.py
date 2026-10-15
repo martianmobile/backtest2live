@@ -219,7 +219,7 @@ def test_source_is_required(write_csv, capsys):
 def test_binance_archive_ends_2024_03_30(write_csv, capsys):
     p = write_csv("ts,side,price,size\n2025-01-01T00:00:00Z,buy,1,1\n", "orders.csv")
     assert cli.main(["fill-gap", p, "--venue", "binance-um", "--pair", "BTCUSDT", "--offline"]) == cli.EXIT_ERROR
-    assert "--book and --trades" in capsys.readouterr().err
+    assert "bybit-linear" in capsys.readouterr().err
 
 
 # --- Binance archive path -------------------------------------------------------
@@ -335,3 +335,90 @@ def test_fetch_verifies_checksum_and_caches(tmp_path, monkeypatch):
 
     with pytest.raises(SystemExit, match="--offline"):
         data._fetch("aggTrades", "BTCUSDT", day, True, lambda m: None)
+
+
+# --- L2 replay (Bybit / OKX day files) and the Bybit venue -------------------------
+
+from backtest2live.fillgap import l2  # noqa: E402
+
+BYBIT_LINES = [
+    '{"topic":"orderbook.500.BTCUSDT","type":"snapshot","ts":%d,"data":{"s":"BTCUSDT","b":[["100.0","5"],["99.9","2"]],"a":[["100.1","3"],["100.2","4"]],"u":1,"seq":1}}',
+    '{"topic":"orderbook.500.BTCUSDT","type":"delta","ts":%d,"data":{"s":"BTCUSDT","b":[["100.0","4"]],"a":[],"u":2,"seq":2}}',          # size change at best bid
+    '{"topic":"orderbook.500.BTCUSDT","type":"delta","ts":%d,"data":{"s":"BTCUSDT","b":[["99.8","1"]],"a":[],"u":3,"seq":3}}',           # deep level: no L1 change
+    '{"topic":"orderbook.500.BTCUSDT","type":"delta","ts":%d,"data":{"s":"BTCUSDT","b":[],"a":[["100.1","0"]],"u":4,"seq":4}}',          # best ask removed -> 100.2
+    '{"topic":"orderbook.500.BTCUSDT","type":"delta","ts":%d,"data":{"s":"BTCUSDT","b":[["100.05","1"]],"a":[],"u":5,"seq":5}}',         # new best bid
+    '{"topic":"orderbook.500.BTCUSDT","type":"delta","ts":%d,"data":{"s":"BTCUSDT","b":[],"a":[["100.2","5"]],"u":6,"seq":6}}',          # later row so the book covers t<=10 s
+]
+OKX_LINES = [
+    '{"action":"snapshot","ts":%d,"bids":[["100.0","5","0","2"],["99.9","2","0","1"]],"asks":[["100.1","3","0","1"]]}',
+    '{"action":"update","ts":%d,"bids":[["100.0","0","0","0"]],"asks":[]}',
+]
+
+
+def test_replay_bybit_emits_only_top_of_book_changes():
+    lines = [l % (T + 1000 + (100 * i if i < 5 else 9000)) for i, l in enumerate(BYBIT_LINES)]
+    b = l2.replay_l1(lines)
+    assert list(b["bid_px"]) == [100.0, 100.0, 100.0, 100.05, 100.05]
+    assert list(b["bid_qty"]) == [5.0, 4.0, 4.0, 1.0, 1.0]
+    assert list(b["ask_px"]) == [100.1, 100.1, 100.2, 100.2, 100.2]
+    assert list(b["ask_qty"]) == [3.0, 3.0, 4.0, 4.0, 5.0]
+    assert b["t"][0] == (T + 1000) * 1000  # ms -> us
+
+
+def test_replay_okx_best_removed_falls_back():
+    lines = [l % (T + 1000 + 100 * i) for i, l in enumerate(OKX_LINES)]
+    b = l2.replay_l1(lines)
+    assert list(b["bid_px"]) == [100.0, 99.9] and list(b["bid_qty"]) == [5.0, 2.0]
+
+
+def test_l2_file_with_trades_runs_fill_gap(tmp_path, write_csv, capsys):
+    f = tmp_path / "2024-03-30_BTCUSDT_ob500.data"
+    f.write_text("\n".join(l % (T + 1000 + (100 * i if i < 5 else 9000)) for i, l in enumerate(BYBIT_LINES)) + "\n")
+    trades = write_csv(_abs("ts,price,qty,is_buyer_maker\n2000,100.0,6,true"), "trades.csv")
+    # at 1500 the best bid is 100.05 x 1; a buy at 100.05 joins behind 1, then 6 prints through at 100.0
+    p = write_csv(orders(["a,1500,buy,100.05,0.5,4500,1"]), "orders.csv")
+    rc, d = run(capsys, p, ["--l2", str(f), "--trades", trades, "--tick", "0.05"])
+    assert d["counts"]["proxy_fills"] == 1
+    assert "ob500.data" in d["source"]
+
+
+def _bybit_archive(tmp_path, monkeypatch, day="2024-06-01"):
+    monkeypatch.setenv("BT2LIVE_CACHE", str(tmp_path / "cache"))
+    import gzip
+    t0 = T + 0  # keep the synthetic day's times on T for simplicity
+    ob = tmp_path / "cache" / "bybit" / "orderbook" / "linear" / "BTCUSDT"
+    ob.mkdir(parents=True)
+    (ob / f"{day}_BTCUSDT_ob500.data.zip").write_bytes(
+        _zip_bytes(f"{day}_BTCUSDT_ob500.data", "\n".join(l % (t0 + 1000 + (100 * i if i < 5 else 9000)) for i, l in enumerate(BYBIT_LINES)) + "\n"))
+    tr = tmp_path / "cache" / "bybit" / "trading" / "BTCUSDT"
+    tr.mkdir(parents=True)
+    csv = ("timestamp,symbol,side,size,price,tickDirection,trdMatchID,grossValue,homeNotional,foreignNotional\n"
+           f"{(t0 + 2000) / 1000:.4f},BTCUSDT,Sell,6,100.0,MinusTick,x,0,0,0\n"
+           f"{(t0 + 3000) / 1000:.4f},BTCUSDT,Buy,1,100.1,PlusTick,y,0,0,0\n")
+    with gzip.open(tr / f"BTCUSDT{day}.csv.gz", "wt") as fh:
+        fh.write(csv)
+
+
+def test_bybit_venue_offline(tmp_path, monkeypatch, write_csv, capsys):
+    _bybit_archive(tmp_path, monkeypatch, day="2024-03-30")  # synthetic times sit on T = 2024-03-30
+    p = write_csv(orders(["a,1500,buy,100.05,0.5,4500,1"]), "orders.csv")
+    rc, d = run(capsys, p, ["--venue", "bybit-linear", "--pair", "BTCUSDT", "--offline", "--tick", "0.05"])
+    assert d["counts"]["proxy_fills"] == 1
+    assert d["source"].startswith("Bybit linear")
+    # replay cached as .npz next to the archive file
+    assert list((tmp_path / "cache" / "bybit" / "orderbook" / "linear" / "BTCUSDT").glob("*.l1v1.npz"))
+
+
+def test_book_and_l2_together_is_an_error(write_csv, market, capsys):
+    p = write_csv(orders(["a,1500,buy,100.0,0.1,4500,1"]), "orders.csv")
+    assert cli.main(["fill-gap", p, *market, "--l2", "x.data"]) == cli.EXIT_ERROR
+    assert "not both" in capsys.readouterr().err
+
+
+def test_replay_snapshot_csv():
+    rows = ["timestamp,bids,asks",
+            f'{T + 1000},"[[""100.0"", ""5""], [""99.9"", ""2""]]","[[""100.1"", ""3""]]"',
+            f'{T + 2000},"[[""100.0"", ""5""], [""99.9"", ""2""]]","[[""100.1"", ""3""]]"',   # unchanged top: no row
+            f'{T + 3000},"[[""100.05"", ""1""], [""100.0"", ""5""]]","[[""100.1"", ""3""]]"']
+    b = l2.replay_l1(rows)
+    assert list(b["bid_px"]) == [100.0, 100.05] and list(b["t"]) == [(T + 1000) * 1000, (T + 3000) * 1000]

@@ -34,7 +34,7 @@ BOOK_ALIASES = {
     "ask_qty": ("ask_qty", "ask_size", "best_ask_qty", "ask_sz"),
 }
 TRADE_ALIASES = {
-    "t": ("ts", "timestamp", "time", "transact_time", "trade_time", "t"),
+    "t": ("ts", "timestamp", "time", "transact_time", "trade_time", "created_time", "t"),
     "px": ("price", "px"),
     "qty": ("qty", "quantity", "size", "amount"),
     "is_buyer_maker": ("is_buyer_maker", "buyer_maker", "m"),
@@ -247,7 +247,7 @@ def load_binance_um(pair, days, offline=False, log=print):
     if days[0] > BINANCE_BOOKTICKER_LAST:
         raise SystemExit(
             f"error: Binance publishes USDT-M bookTicker only through {BINANCE_BOOKTICKER_LAST}; your orders "
-            f"arrive on {days[0]}. Pass your own top-of-book and trades with --book and --trades.")
+            f"arrive on {days[0]}. Use --venue bybit-linear (2023 to yesterday), or your own data with --book/--l2 and --trades.")
     days = [d for d in days if d <= BINANCE_BOOKTICKER_LAST]
     books, trades = [], []
     for d in days:
@@ -287,3 +287,94 @@ def infer_tick(book):
         raise SystemExit("error: cannot infer the tick size from the book; pass --tick")
     step = float(d.min())
     return float(f"{step:.8g}")  # 0.09999999999 → 0.1
+
+
+# --- Bybit public archive (linear / inverse perpetuals) ---------------------------
+
+BYBIT_BOOK_ROOT = "https://quote-saver.bycsi.com/orderbook"
+BYBIT_TRADES_ROOT = "https://public.bybit.com/trading"
+
+def _download(url, path, offline, log):
+    """Fetch url to path unless cached. No checksum: the publisher does not provide one."""
+    if os.path.exists(path):
+        return path
+    if offline:
+        raise SystemExit(f"error: {os.path.basename(path)} is not cached and --offline is set (cache: {cache_dir()})")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    log(f"downloading {url}")
+    tmp = path + ".part"
+    try:
+        with urllib.request.urlopen(url, timeout=600) as r, open(tmp, "wb") as fh:
+            while True:
+                chunk = r.read(1 << 20)
+                if not chunk:
+                    break
+                fh.write(chunk)
+    except OSError as e:
+        raise SystemExit(f"error: could not download {url}: {e}")
+    os.replace(tmp, path)
+    return path
+
+
+def _bybit_book_file(category, pair, day, offline, log):
+    """The archive names files ob500 (older days) or ob200 (recent); try both."""
+    base = os.path.join(cache_dir(), "bybit", "orderbook", category, pair)
+    for depth in ("ob500", "ob200"):
+        name = f"{day.isoformat()}_{pair}_{depth}.data.zip"
+        path = os.path.join(base, name)
+        if os.path.exists(path):
+            return path
+    last = None
+    for depth in ("ob500", "ob200"):
+        name = f"{day.isoformat()}_{pair}_{depth}.data.zip"
+        try:
+            return _download(f"{BYBIT_BOOK_ROOT}/{category}/{pair}/{name}", os.path.join(base, name), offline, log)
+        except SystemExit as e:
+            last = e
+    raise SystemExit(f"error: no Bybit {category} order-book file for {pair} on {day} ({last})")
+
+
+def load_bybit(category, pair, days, offline=False, log=print):
+    """Bybit public L2 archive replayed to top-of-book, plus the public trades CSV, for the UTC days."""
+    from backtest2live.fillgap import l2
+    books, trades = [], []
+    for d in days:
+        bf = _bybit_book_file(category, pair, d, offline, log)
+        books.append(l2.l1_from_file(bf, cache_path=bf + ".l1v1.npz", log=log))
+        tname = f"{pair}{d.isoformat()}.csv.gz"
+        tf = _download(f"{BYBIT_TRADES_ROOT}/{pair}/{tname}",
+                       os.path.join(cache_dir(), "bybit", "trading", pair, tname), offline, log)
+        tr = pd.read_csv(tf, usecols=["timestamp", "side", "size", "price"])
+        trades.append(tr)
+    book = _sort({k: np.concatenate([b[k] for b in books]) for k in ("t", "bid_px", "bid_qty", "ask_px", "ask_qty")})
+    tr = pd.concat(trades, ignore_index=True)
+    trd = _sort({"t": np.rint(tr["timestamp"].to_numpy(np.float64) * 1e6).astype(np.int64),
+                 "px": tr["price"].to_numpy(np.float64), "qty": tr["size"].to_numpy(np.float64),
+                 "sell_aggr": tr["side"].astype(str).str.lower().eq("sell").to_numpy()})
+    return book, trd
+
+
+def load_venue(venue, pair, days, offline=False, log=print):
+    """Dispatch on --venue. Returns (book, trades) in the normalized arrays."""
+    if venue == "binance-um":
+        return load_binance_um(pair, days, offline=offline, log=log)
+    if venue.startswith("bybit-"):
+        return load_bybit(venue.split("-", 1)[1], pair, days, offline=offline, log=log)
+    raise SystemExit(f"error: unknown venue {venue!r}")
+
+
+def load_l2_files(paths, log=print):
+    """User-supplied L2 day files (OKX books, Bybit ob*.data[.zip]) replayed to top-of-book."""
+    from backtest2live.fillgap import l2
+    books = []
+    for p in paths:
+        if not os.path.exists(p):
+            raise SystemExit(f"error: L2 file not found: {p!r}")
+        books.append(l2.l1_from_file(p, cache_path=None, log=log))
+    return _sort({k: np.concatenate([b[k] for b in books]) for k in ("t", "bid_px", "bid_qty", "ask_px", "ask_qty")})
+
+
+def venue_source(venue, pair):
+    return {"binance-um": "Binance USDT-M futures public archive",
+            "bybit-linear": "Bybit linear perpetuals public archive (L2 replayed to top-of-book)",
+            "bybit-inverse": "Bybit inverse perpetuals public archive (L2 replayed to top-of-book)"}[venue] + f", {pair}"
