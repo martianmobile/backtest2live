@@ -164,5 +164,6 @@ def test_l2_file_prices_takers(tmp_path, write_csv, capsys):
     ]) + "\n")
     p = write_csv(orders(["a,2000,buy,1,market,,100.05"]), "o.csv")
     rc, d = run(capsys, p, ["--l2", str(f)], "--tick", "0.05")
+    assert rc == 0 and d["verdict"] == "REPORTED"
     assert d["counts"]["taker"] == 1 and "ob500.data" in d["source"]
     assert d["cost_bps"]["mean"] == pytest.approx((100.1 - 100.05) / 100.05 * 1e4, rel=1e-6)

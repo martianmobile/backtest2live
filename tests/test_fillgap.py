@@ -431,9 +431,9 @@ def test_replay_snapshot_mid_stream_resets_the_book_after_a_sequence_gap():
         '{"topic":"orderbook.500.BTCUSDT","type":"snapshot","ts":%d,"data":{"b":[["100.0","5"]],"a":[["100.1","3"]],"u":1,"seq":10}}',
         '{"topic":"orderbook.500.BTCUSDT","type":"delta","ts":%d,"data":{"b":[["100.0","4"]],"a":[],"u":2,"seq":11}}',
         '{"topic":"orderbook.500.BTCUSDT","type":"delta","ts":%d,"data":{"b":[["100.05","2"]],"a":[],"u":7,"seq":16}}',  # gap: u 3-6 lost
-        '{"topic":"orderbook.500.BTCUSDT","type":"snapshot","ts":%d,"data":{"b":[["99.5","1"]],"a":[["99.6","2"]],"u":1,"seq":20}}',
+        '{"topic":"orderbook.500.BTCUSDT","type":"snapshot","ts":%d,"data":{"b":[["99.5","1"]],"a":[["100.2","2"]],"u":1,"seq":20}}',
     ]
     b = l2.replay_l1([l % (T + 1000 + 100 * i) for i, l in enumerate(lines)])
     assert list(b["bid_px"]) == [100.0, 100.0, 100.05, 99.5]  # post-gap delta applied, then reset
-    assert list(b["ask_px"]) == [100.1, 100.1, 100.1, 99.6]   # 100.1 gone: the snapshot is the whole book
+    assert list(b["ask_px"]) == [100.1, 100.1, 100.1, 100.2]  # 100.1 gone: the snapshot is the whole book
     assert list(b["bid_qty"]) == [5.0, 4.0, 2.0, 1.0]
