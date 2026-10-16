@@ -153,3 +153,17 @@ def test_bad_order_log(write_csv, book, capsys, csv, msg):
 def test_source_is_required(write_csv, capsys):
     p = write_csv(f"ts,side,size\n{T + 2000},buy,1\n", "o.csv")
     assert cli.main(["cost-gap", p]) == cli.EXIT_ERROR
+
+
+def test_l2_file_prices_takers(tmp_path, write_csv, capsys):
+    # a Bybit ob500 day file via --l2: best ask 100.1 x 3 from t=1000; booked mid 100.05 -> +5 bps
+    f = tmp_path / "2024-03-30_BTCUSDT_ob500.data"
+    f.write_text("\n".join([
+        '{"topic":"orderbook.500.BTCUSDT","type":"snapshot","ts":%d,"data":{"b":[["100.0","5"]],"a":[["100.1","3"]],"u":1,"seq":1}}' % (T + 1000),
+        '{"topic":"orderbook.500.BTCUSDT","type":"delta","ts":%d,"data":{"b":[["100.0","6"]],"a":[],"u":2,"seq":2}}' % (T + 9000),
+    ]) + "\n")
+    p = write_csv(orders(["a,2000,buy,1,market,,100.05"]), "o.csv")
+    rc, d = run(capsys, p, ["--l2", str(f)], "--tick", "0.05")
+    assert rc == 0 and d["verdict"] == "REPORTED"
+    assert d["counts"]["taker"] == 1 and "ob500.data" in d["source"]
+    assert d["cost_bps"]["mean"] == pytest.approx((100.1 - 100.05) / 100.05 * 1e4, rel=1e-6)
