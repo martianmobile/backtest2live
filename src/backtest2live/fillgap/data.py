@@ -278,15 +278,41 @@ def utc_days(t_from_us, t_to_us):
     return [d0 + timedelta(days=i) for i in range((d1 - d0).days + 1)]
 
 
+TICK_MIN_GAPS = 3  # a price step must recur this often to be the tick; one malformed row cannot set it
+
+
 def infer_tick(book):
-    """Smallest price step seen in the book, rounded to a clean decimal."""
-    px = np.unique(np.r_[book["bid_px"][:200_000], book["ask_px"][:200_000]])
-    d = np.diff(px)
+    """Smallest price step that recurs in the book, rounded to a clean decimal. The whole book is
+    read: a venue can change a symbol's tick inside a window, and a sample from before the change
+    misses the finer grid."""
+    px = np.unique(np.r_[book["bid_px"], book["ask_px"]])
+    d = np.round(np.diff(px), 10)
     d = d[d > 0]
     if not len(d):
         raise SystemExit("error: cannot infer the tick size from the book; pass --tick")
-    step = float(d.min())
+    steps, counts = np.unique(d, return_counts=True)
+    common = steps[counts >= TICK_MIN_GAPS]
+    step = float(common.min() if len(common) else steps.min())
     return float(f"{step:.8g}")  # 0.09999999999 → 0.1
+
+
+def day_tick(book, day):
+    """Tick from the rows of one UTC day only, so a book that spans midnight into a day after a
+    tick change does not move the change a day early. Falls back to the whole book."""
+    t0 = (day - date(1970, 1, 1)).days * 86_400 * 1_000_000
+    m = (book["t"] >= t0) & (book["t"] < t0 + 86_400 * 1_000_000)
+    return infer_tick({"bid_px": book["bid_px"][m], "ask_px": book["ask_px"][m]} if m.sum() > 1 else book)
+
+
+def tick_note(day_ticks):
+    """[(date, tick), ...] in day order → None when one tick, else 'a (from d0), b (from d1)'."""
+    runs = []
+    for day, t in day_ticks:
+        if not runs or runs[-1][1] != t:
+            runs.append((day, t))
+    if len(runs) < 2:
+        return None
+    return ", ".join(f"{t:g} from {day.isoformat()}" for day, t in runs)
 
 
 # --- Bybit public archive (linear / inverse perpetuals) ---------------------------

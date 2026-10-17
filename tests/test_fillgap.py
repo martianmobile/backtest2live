@@ -437,3 +437,68 @@ def test_replay_snapshot_mid_stream_resets_the_book_after_a_sequence_gap():
     assert list(b["bid_px"]) == [100.0, 100.0, 100.05, 99.5]  # post-gap delta applied, then reset
     assert list(b["ask_px"]) == [100.1, 100.1, 100.1, 100.2]  # 100.1 gone: the snapshot is the whole book
     assert list(b["bid_qty"]) == [5.0, 4.0, 2.0, 1.0]
+
+
+# --- tick inference: whole book, recurring step, per-day on a venue -------------------
+
+def _ladder(t0_ms, px, tick):
+    """A synthetic L1 book walking through px (bid prices), the ask one tick above each."""
+    t = (np.arange(len(px)) * 1000 + t0_ms) * 1000
+    bid = np.asarray(px, np.float64)
+    return {"t": t.astype(np.int64), "bid_px": bid, "bid_qty": np.full(len(px), 5.0),
+            "ask_px": np.round(bid + tick, 8), "ask_qty": np.full(len(px), 5.0)}
+
+
+def test_infer_tick_reads_the_whole_book_after_a_tick_change():
+    # 0.1 grid for 300k rows, then the venue moves to 0.01: a sample of the start would say 0.1
+    coarse = 100.0 + 0.1 * (np.arange(300_000) % 20)
+    fine = 100.0 + 0.01 * (np.arange(1_000) % 20)
+    book = {"bid_px": np.r_[coarse, fine], "ask_px": np.r_[coarse, fine] + 0.1}
+    assert data.infer_tick(book) == 0.01
+
+
+def test_infer_tick_ignores_one_malformed_price():
+    px = 100.0 + 0.1 * np.arange(50)
+    book = {"bid_px": np.r_[px, 100.03], "ask_px": px + 0.1}  # one bad row would give a 0.03 step
+    assert data.infer_tick(book) == 0.1
+
+
+def test_venue_tick_change_inside_the_window_runs_each_day_on_its_own_tick(write_csv, monkeypatch, capsys):
+    day2 = T + 86_400_000
+    books = {T: _ladder(T, [100.0, 100.1, 100.2, 100.1, 100.0, 100.1], 0.1),
+             day2: _ladder(day2, [100.0, 100.01, 100.02, 100.03, 100.02, 100.01], 0.01)}
+    empty = {"t": np.zeros(0, np.int64), "px": np.zeros(0), "qty": np.zeros(0), "sell_aggr": np.zeros(0, bool)}
+
+    def load_venue(venue, pair, days, offline, log):
+        bs = [books[T if d.isoformat() == "2024-03-30" else day2] for d in days]
+        return {k: np.concatenate([b[k] for b in bs]) for k in bs[0]}, empty
+
+    monkeypatch.setattr(data, "load_venue", load_venue)
+    p = write_csv(orders(["a,1500,buy,99.9,1,4500,0", f"b,{86_400_000 + 1500},buy,99.97,1,{86_400_000 + 4500},0",
+                          f"c,2500,buy,99.9,1,{86_400_000 + 2500},0"]),  # rests past midnight into day 2
+                  "orders.csv")
+    rc, d = run(capsys, p, ["--venue", "bybit-linear", "--pair", "BNBUSDT"])
+    assert d["tick"] == 0.01
+    assert d["tick_change"] == "0.1 from 2024-03-30, 0.01 from 2024-03-31"
+    assert d["counts"]["passive"] == 3  # 99.97 is on day 2's grid; no off-grid error
+
+
+def test_order_resting_across_a_tick_change_runs_on_the_finer_tick(write_csv, monkeypatch, capsys):
+    # a buy at 99.9 rests from a 0.1 day into a 0.01 day where the book sits at 99.95/99.96 and
+    # sells print at 99.94: nothing reaches 99.9, so no fill (snapping onto 0.1 would grant one)
+    day2 = T + 86_400_000
+    b1 = _ladder(T, [100.0, 100.1, 100.2, 100.1, 100.0, 100.1], 0.1)
+    b2 = _ladder(day2, [99.95, 99.96, 99.97, 99.96, 99.95, 99.96], 0.01)
+    trades = {"t": np.array([day2 + 2000, day2 + 3000, day2 + 4000], np.int64) * 1000,
+              "px": np.array([99.94, 99.94, 99.94]), "qty": np.array([5.0, 5.0, 5.0]),
+              "sell_aggr": np.array([True, True, True])}
+
+    def load_venue(venue, pair, days, offline, log):
+        bs = [b1 if d.isoformat() == "2024-03-30" else b2 for d in days]
+        book = {k: np.concatenate([b[k] for b in bs]) for k in bs[0]}
+        return book, trades
+
+    monkeypatch.setattr(data, "load_venue", load_venue)
+    p = write_csv(orders([f"a,1500,buy,99.9,1,{86_400_000 + 5000},1"]), "orders.csv")
+    rc, d = run(capsys, p, ["--venue", "bybit-linear", "--pair", "BNBUSDT"])
+    assert d["counts"]["touch_fills"] == 0 and d["counts"]["proxy_fills"] == 0
