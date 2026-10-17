@@ -296,6 +296,14 @@ def infer_tick(book):
     return float(f"{step:.8g}")  # 0.09999999999 → 0.1
 
 
+def day_tick(book, day):
+    """Tick from the rows of one UTC day only, so a book that spans midnight into a day after a
+    tick change does not move the change a day early. Falls back to the whole book."""
+    t0 = (day - date(1970, 1, 1)).days * 86_400 * 1_000_000
+    m = (book["t"] >= t0) & (book["t"] < t0 + 86_400 * 1_000_000)
+    return infer_tick({"bid_px": book["bid_px"][m], "ask_px": book["ask_px"][m]} if m.sum() > 1 else book)
+
+
 def tick_note(day_ticks):
     """[(date, tick), ...] in day order → None when one tick, else 'a (from d0), b (from d1)'."""
     runs = []

@@ -470,13 +470,14 @@ def test_venue_tick_change_inside_the_window_runs_each_day_on_its_own_tick(write
     empty = {"t": np.zeros(0, np.int64), "px": np.zeros(0), "qty": np.zeros(0), "sell_aggr": np.zeros(0, bool)}
 
     def load_venue(venue, pair, days, offline, log):
-        key = T if days[0].isoformat() == "2024-03-30" else day2
-        return books[key], empty
+        bs = [books[T if d.isoformat() == "2024-03-30" else day2] for d in days]
+        return {k: np.concatenate([b[k] for b in bs]) for k in bs[0]}, empty
 
     monkeypatch.setattr(data, "load_venue", load_venue)
-    p = write_csv(orders(["a,1500,buy,99.9,1,4500,0", f"b,{86_400_000 + 1500},buy,99.97,1,{86_400_000 + 4500},0"]),
+    p = write_csv(orders(["a,1500,buy,99.9,1,4500,0", f"b,{86_400_000 + 1500},buy,99.97,1,{86_400_000 + 4500},0",
+                          f"c,2500,buy,99.9,1,{86_400_000 + 2500},0"]),  # rests past midnight into day 2
                   "orders.csv")
     rc, d = run(capsys, p, ["--venue", "bybit-linear", "--pair", "BNBUSDT"])
     assert d["tick"] == 0.01
     assert d["tick_change"] == "0.1 from 2024-03-30, 0.01 from 2024-03-31"
-    assert d["counts"]["passive"] == 2  # 99.97 is on day 2's grid; no off-grid error
+    assert d["counts"]["passive"] == 3  # 99.97 is on day 2's grid; no off-grid error
