@@ -134,7 +134,8 @@ def evaluate(args, log=print):
             book, _ = data.load_venue(args.venue, pair, days, offline=args.offline, log=log)
             day_tick = args.tick or data.day_tick(book, days[0])  # per day: a venue can change the tick mid-window
             day_ticks.append((days[0], day_tick))
-            put(idx, _price(book, orders, idx, day_tick, latency_us))
+            run_tick = args.tick or min(data.day_tick(book, x) for x in days)  # finest of the days loaded
+            put(idx, _price(book, orders, idx, run_tick, latency_us))
         tick = min(t for _, t in day_ticks)
         tick_change = data.tick_note(day_ticks)
         if tick_change:

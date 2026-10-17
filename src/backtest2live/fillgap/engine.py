@@ -101,7 +101,10 @@ def evaluate(args, log=print):
             day_tick = args.tick or data.day_tick(book, days[0])  # per day: a venue can change the tick mid-window
             ticks[idx] = day_tick
             day_ticks.append((days[0], day_tick))
-            put(idx, _run_chunk(book, trades, orders, idx, day_tick, latency_us))
+            # run on the finest tick of the days loaded: an order resting past a tick change into the
+            # next day must not have that day's prices snapped onto the old, coarser grid
+            run_tick = args.tick or min(data.day_tick(book, x) for x in days)
+            put(idx, _run_chunk(book, trades, orders, idx, run_tick, latency_us))
         if args.tick is None:
             _check_grid(orders, ticks, log)  # whole log, each order against its own day's tick
             tick = min(t for _, t in day_ticks)

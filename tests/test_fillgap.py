@@ -481,3 +481,24 @@ def test_venue_tick_change_inside_the_window_runs_each_day_on_its_own_tick(write
     assert d["tick"] == 0.01
     assert d["tick_change"] == "0.1 from 2024-03-30, 0.01 from 2024-03-31"
     assert d["counts"]["passive"] == 3  # 99.97 is on day 2's grid; no off-grid error
+
+
+def test_order_resting_across_a_tick_change_runs_on_the_finer_tick(write_csv, monkeypatch, capsys):
+    # a buy at 99.9 rests from a 0.1 day into a 0.01 day where the book sits at 99.95/99.96 and
+    # sells print at 99.94: nothing reaches 99.9, so no fill (snapping onto 0.1 would grant one)
+    day2 = T + 86_400_000
+    b1 = _ladder(T, [100.0, 100.1, 100.2, 100.1, 100.0, 100.1], 0.1)
+    b2 = _ladder(day2, [99.95, 99.96, 99.97, 99.96, 99.95, 99.96], 0.01)
+    trades = {"t": np.array([day2 + 2000, day2 + 3000, day2 + 4000], np.int64) * 1000,
+              "px": np.array([99.94, 99.94, 99.94]), "qty": np.array([5.0, 5.0, 5.0]),
+              "sell_aggr": np.array([True, True, True])}
+
+    def load_venue(venue, pair, days, offline, log):
+        bs = [b1 if d.isoformat() == "2024-03-30" else b2 for d in days]
+        book = {k: np.concatenate([b[k] for b in bs]) for k in bs[0]}
+        return book, trades
+
+    monkeypatch.setattr(data, "load_venue", load_venue)
+    p = write_csv(orders([f"a,1500,buy,99.9,1,{86_400_000 + 5000},1"]), "orders.csv")
+    rc, d = run(capsys, p, ["--venue", "bybit-linear", "--pair", "BNBUSDT"])
+    assert d["counts"]["touch_fills"] == 0 and d["counts"]["proxy_fills"] == 0

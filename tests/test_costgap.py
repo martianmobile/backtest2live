@@ -190,3 +190,5 @@ def test_venue_tick_change_prices_each_day_on_its_own_tick(write_csv, monkeypatc
     rc, d = run(capsys, p, ["--venue", "bybit-linear", "--pair", "BNBUSDT"])
     assert d["tick_change"] == "0.1 from 2024-03-30, 0.01 from 2024-03-31"
     assert d["counts"]["taker"] == 2 and d["counts"]["beyond_touch"] == 2
+    assert d["tick"] == 0.01
+    assert d["cost_bps"]["mean"] == pytest.approx(5.4924, rel=1e-4)  # both days on 0.1 would give 7.7421
