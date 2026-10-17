@@ -100,6 +100,7 @@ def evaluate(args, log=print):
     latency_us = int(round(args.latency_ms * 1000))
     tick = args.tick
 
+    tick_change = None
     fields = ("status", "t_arr", "baseline", "vwap", "filled", "unfilled", "beyond_touch", "cost_bps", "range_bps")
     out = {k: None for k in fields}
     sweep = {ms: np.full(n, np.nan) for ms in LATENCY_SWEEP_MS}
@@ -126,15 +127,22 @@ def evaluate(args, log=print):
         pair = args.pair.upper()
         t_arr = orders["t"] + latency_us
         day_of = t_arr // (86_400 * US_PER_S)
+        day_ticks = []
         for d in np.unique(day_of):
             idx = np.flatnonzero(day_of == d)
             days = data.utc_days(int(t_arr[idx].min()), int(t_arr[idx].max()) + int(max(LATENCY_SWEEP_MS)) * 1000)
             book, _ = data.load_venue(args.venue, pair, days, offline=args.offline, log=log)
-            tick = tick or data.infer_tick(book)
-            put(idx, _price(book, orders, idx, tick, latency_us))
+            day_tick = args.tick or data.infer_tick(book)  # per day: a venue can change the tick mid-window
+            day_ticks.append((days[0], day_tick))
+            put(idx, _price(book, orders, idx, day_tick, latency_us))
+        tick = min(t for _, t in day_ticks)
+        tick_change = data.tick_note(day_ticks)
+        if tick_change:
+            log(f"cost-gap: the venue changed the tick inside the window ({tick_change}); "
+                f"each day is priced on its own tick")
         source = data.venue_source(args.venue, pair)
 
-    return aggregate(orders, out, sweep, args, tick, source)
+    return aggregate(orders, out, sweep, args, tick, source, tick_change)
 
 
 def _stats(x):
@@ -145,7 +153,7 @@ def _stats(x):
             "p90": float(np.quantile(x, 0.9))}
 
 
-def aggregate(orders, r, sweep, args, tick, source):
+def aggregate(orders, r, sweep, args, tick, source, tick_change=None):
     st = r["status"]
     taker = st == sim.TAKER
     cost = r["cost_bps"]
@@ -187,6 +195,7 @@ def aggregate(orders, r, sweep, args, tick, source):
         "source": source,
         "window_utc": [int(t.min()), int(t.max())],
         "tick": tick,
+        "tick_change": tick_change,
         "latency_ms": args.latency_ms,
         "tolerance": args.tolerance,
         "baseline": orders["baseline_source"],

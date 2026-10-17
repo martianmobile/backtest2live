@@ -71,7 +71,8 @@ def markdown(res):
                      f"{_bps(st['median'] if st else None)} |")
         L.append("")
     L += ["---", "", "## Inputs", "",
-          f"- Market data: {res['source']}; tick {res['tick']:g}",
+          f"- Market data: {res['source']}; tick "
+          + (f"{res['tick']:g}" if not res.get("tick_change") else f"{res['tick_change']} (the venue changed it)"),
           f"- Baseline (what the backtest booked): {res['baseline']}",
           f"- Arrival latency: {res['latency_ms']:g} ms",
           f"- Verdict OVERSTATED when the cost removes more than {_pct(res['tolerance'])} of the backtest's P&L "

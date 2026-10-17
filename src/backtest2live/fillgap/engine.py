@@ -19,16 +19,19 @@ OFF_GRID_MAX_SHARE = 0.01  # above this, the tick is wrong; below it, the odd ma
 
 def _check_grid(orders, tick, log):
     """Once per run, over the whole log: a wrong tick puts most prices off the grid, a malformed
-    row puts one (the public archive carries the occasional one). Trip on the share, snap the few."""
+    row puts one (the public archive carries the occasional one). Trip on the share, snap the few.
+    `tick` is one value, or one per order when the venue changed the tick inside the window."""
+    tick = np.asarray(tick, np.float64)
+    grid = f"{float(tick.flat[0]):g}" if np.unique(tick).size == 1 else "day's"
     px = orders["px_f"] / tick
     off = np.abs(px - np.rint(px)) > 1e-6
     if not off.any():
         return
     share = off.mean()
     if share > OFF_GRID_MAX_SHARE:
-        raise SystemExit(f"error: {share:.1%} of order prices are not on the {tick:g} tick grid "
+        raise SystemExit(f"error: {share:.1%} of order prices are not on the {grid} tick grid "
                          f"(first: {orders['px_f'][off][0]:g}); pass --tick or fix the log")
-    log(f"fill-gap: {int(off.sum())} of {len(px):,} order prices off the {tick:g} tick grid; "
+    log(f"fill-gap: {int(off.sum())} of {len(px):,} order prices off the {grid} tick grid; "
         f"snapped to the nearest tick")
 
 
@@ -62,6 +65,7 @@ def evaluate(args, log=print):
     latency_us = int(round(args.latency_ms * 1000))
     tick = args.tick
 
+    tick_change = None
     fields = ("status", "queue", "t_act", "touch", "t_touch", "proxy", "t_proxy", "t_arr", "range_bps")
     out = {k: None for k in fields}
 
@@ -89,17 +93,25 @@ def evaluate(args, log=print):
         day_of = (t_arr // (86_400 * US_PER_S))
         if tick is not None:
             _check_grid(orders, tick, log)
+        ticks, day_ticks = np.full(n, np.nan), []
         for d in np.unique(day_of):
             idx = np.flatnonzero(day_of == d)
             days = data.utc_days(int(t_arr[idx].min()), int(orders["t_end"][idx].max()))
             book, trades = data.load_venue(args.venue, pair, days, offline=args.offline, log=log)
-            if tick is None:
-                tick = data.infer_tick(book)
-                _check_grid(orders, tick, log)  # whole log, not this day's slice
-            put(idx, _run_chunk(book, trades, orders, idx, tick, latency_us))
+            day_tick = args.tick or data.infer_tick(book)  # per day: a venue can change the tick mid-window
+            ticks[idx] = day_tick
+            day_ticks.append((days[0], day_tick))
+            put(idx, _run_chunk(book, trades, orders, idx, day_tick, latency_us))
+        if args.tick is None:
+            _check_grid(orders, ticks, log)  # whole log, each order against its own day's tick
+            tick = min(t for _, t in day_ticks)
+            tick_change = data.tick_note(day_ticks)
+            if tick_change:
+                log(f"fill-gap: the venue changed the tick inside the window ({tick_change}); "
+                    f"each day runs on its own tick")
         source = data.venue_source(args.venue, pair)
 
-    return aggregate(orders, out, args, tick, source)
+    return aggregate(orders, out, args, tick, source, tick_change)
 
 
 def _rate(mask, base):
@@ -112,7 +124,7 @@ def _median_s(t_fill, t_arr, mask):
     return float(np.median((t_fill[m] - t_arr[m]) / US_PER_S)) if m.any() else None
 
 
-def aggregate(orders, r, args, tick, source):
+def aggregate(orders, r, args, tick, source, tick_change=None):
     st = r["status"]
     passive = (st == sim.ACTIVE) | (st == sim.NEVER_REACHED)
     claimed = orders["claimed"]
@@ -160,6 +172,7 @@ def aggregate(orders, r, args, tick, source):
         "source": source,
         "window_utc": [int(t.min()), int(orders["t_end"].max())],
         "tick": tick,
+        "tick_change": tick_change,
         "latency_ms": args.latency_ms,
         "order_end": orders["end_source"],
         "tolerance": args.tolerance,
