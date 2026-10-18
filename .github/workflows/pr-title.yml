@@ -1,7 +1,8 @@
 name: PR title
 
 # The squash-merge commit takes the PR title, and semantic-release reads it:
-# feat -> minor, fix -> patch. No "!" or BREAKING CHANGE before 1.0.
+# feat -> minor, fix -> patch. No "!" or BREAKING CHANGE before 1.0. The body becomes the
+# commit body, so it is checked too.
 on:
   pull_request_target:
     types: [opened, edited, synchronize, reopened]
@@ -34,5 +35,20 @@ jobs:
         run: |
           if printf '%s' "$TITLE" | grep -Eq '^[a-z]+(\([^)]*\))?!:'; then
             echo "::error::'!' would release 1.0.0. Before 1.0, describe the break in the body under a feat: title."
+            exit 1
+          fi
+      # The squash commit body is the PR body, and both markers below act on that commit:
+      # a skip marker stops every workflow on the merge push (no release), and a
+      # BREAKING CHANGE footer would release 1.0.0.
+      - name: No skip or breaking-change marker in the body
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if printf '%s' "$BODY" | grep -Eiq '\[(skip ci|ci skip|no ci|skip actions|actions skip)\]|^skip-checks: *true'; then
+            echo "::error::The PR body carries a skip marker; the merge commit would run no workflows, so nothing would release. Reword it (e.g. 'skip-ci marker')."
+            exit 1
+          fi
+          if printf '%s' "$BODY" | grep -Eq '^BREAKING[ -]CHANGE:'; then
+            echo "::error::A BREAKING CHANGE footer would release 1.0.0. Before 1.0, describe the break without the footer."
             exit 1
           fi

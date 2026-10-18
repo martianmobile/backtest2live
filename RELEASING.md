@@ -9,7 +9,7 @@
 
 Milestones are for planning only; closing one does not release. A bad release is fixed forward with a `fix:` PR, because PyPI never reuses a version.
 
-**Before 1.0:** never put `!` or `BREAKING CHANGE` in a PR title or body, because semantic-release would jump to 1.0.0. The `PR title` check enforces conventional titles and the no-`!` rule.
+**Before 1.0:** never put `!` or `BREAKING CHANGE` in a PR title or body, because semantic-release would jump to 1.0.0. The `PR title` check enforces conventional titles and the no-`!` rule, and fails a PR body with a skip-ci marker (the merge push would run no workflows, so nothing would release) or a `BREAKING CHANGE:` footer.
 
 ## One-time setup
 
