@@ -1,13 +1,13 @@
 # Releasing
 
-**Commits decide the version; milestones decide when.** Closing a milestone runs `.github/workflows/release.yml`:
+**Commits decide the version and every merge ships it.** Each push to `main` runs `.github/workflows/release.yml`:
 
-1. semantic-release reads the squash-merged PR titles since the last tag. `feat:` bumps the minor version, and `fix:` or `perf:` bumps the patch.
-2. The computed version must equal the closed milestone's title (`v0.2` → `0.2.0`). If it doesn't, the job fails before tagging.
+1. semantic-release reads the squash-merged PR titles since the last tag. `feat:` bumps the minor version, and `fix:` or `perf:` bumps the patch. A merge with only `docs:`, `test:`, `ci:` or `chore:` commits releases nothing.
+2. The manual `workflow_dispatch` can pin the version (`version: v0.4.1`). A pinned run fails before tagging if the commits compute a different version, or if there is nothing to release.
 3. The version is written into `pyproject.toml` and the plugin manifest. The job builds sdist and wheel, commits `chore(release)`, tags `vX.Y.Z`, and creates the GitHub release with `dist/*` attached.
 4. The `pypi` job uploads `dist/*` with trusted publishing, so no token is stored.
 
-A milestone that closes with nothing to release fails the job. The manual `workflow_dispatch` with `version: v0.2` runs the same path.
+Milestones are for planning only; closing one does not release. A bad release is fixed forward with a `fix:` PR, because PyPI never reuses a version.
 
 **Before 1.0:** never put `!` or `BREAKING CHANGE` in a PR title or body, because semantic-release would jump to 1.0.0. The `PR title` check enforces conventional titles and the no-`!` rule.
 
