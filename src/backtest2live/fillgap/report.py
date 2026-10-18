@@ -69,7 +69,8 @@ def markdown(res):
             L.append(f"| {h['hour']:02d} | {h['orders']:,} | {_pct(h['baseline'])} | {_pct(h['proxy'])} |")
         L.append("")
     L += ["---", "", "## Inputs", "",
-          f"- Market data: {res['source']}; tick {res['tick']:g}",
+          f"- Market data: {res['source']}; tick "
+          + (f"{res['tick']:g}" if not res.get("tick_change") else f"{res['tick_change']} (the venue changed it)"),
           f"- Order life: until `{res['order_end']}`" if not res["order_end"].startswith("--") else
           f"- Order life: {res['order_end']} (no end/cancel column in the log)",
           f"- Arrival latency: {res['latency_ms']:g} ms",
