@@ -1,7 +1,8 @@
 name: PR title
 
 # The squash-merge commit takes the PR title, and semantic-release reads it:
-# feat -> minor, fix -> patch. No "!" or BREAKING CHANGE before 1.0.
+# feat -> minor, fix -> patch. No "!" or BREAKING CHANGE before 1.0. The body becomes the
+# commit body, so it is checked too.
 on:
   pull_request_target:
     types: [opened, edited, synchronize, reopened]
@@ -34,5 +35,21 @@ jobs:
         run: |
           if printf '%s' "$TITLE" | grep -Eq '^[a-z]+(\([^)]*\))?!:'; then
             echo "::error::'!' would release 1.0.0. Before 1.0, describe the break in the body under a feat: title."
+            exit 1
+          fi
+      # The squash commit is the PR title plus the PR body, and both markers below act on it:
+      # a skip marker stops every workflow on the merge push (no release), and a line opening
+      # with BREAKING CHANGE (the release parser's note pattern) would release 1.0.0.
+      - name: No skip marker in the title or body; no breaking-change note in the body
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if printf '%s\n%s' "$TITLE" "$BODY" | grep -Eiq '\[(skip ci|ci skip|no ci|skip actions|actions skip)\]|^skip-checks: *true'; then
+            echo "::error::The PR title or body carries a skip marker; the merge commit would run no workflows, so nothing would release. Reword it (e.g. 'skip-ci marker')."
+            exit 1
+          fi
+          if printf '%s' "$BODY" | grep -Eiq '^[[:space:]|*]*BREAKING CHANGE([:[:space:]]|$)'; then
+            echo "::error::A line that opens with BREAKING CHANGE (any case, even in bold) would release 1.0.0. Before 1.0, describe the break without it."
             exit 1
           fi
