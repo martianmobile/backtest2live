@@ -1,8 +1,8 @@
 """Release helpers for semantic-release's exec plugin (stdlib only).
 
   set <version>    write the version into pyproject.toml and the plugin manifest
-  check <version>  fail unless <version> matches EXPECTED_VERSION
-                   (a milestone title like v0.2 means 0.2.0)
+  check <version>  when EXPECTED_VERSION is set (a pinned manual run, e.g. v0.4.1),
+                   fail unless <version> matches it; unset (a push) passes
 """
 
 import json
@@ -41,12 +41,13 @@ def set_version(version):
 def check(version):
     expected = os.environ.get("EXPECTED_VERSION", "")
     if not expected:
-        raise SystemExit("release: EXPECTED_VERSION is not set")
+        print(f"release: {version} (no version pin)")
+        return
     want = normalize(expected)
     if version != want:
         raise SystemExit(
-            f"release: commits since the last tag compute {version}, but the milestone says {want}. "
-            "Fix the milestone title or the commit types; nothing was tagged.")
+            f"release: commits since the last tag compute {version}, but the run was pinned to {want}. "
+            "Fix the pin or the commit types; nothing was tagged.")
     print(f"release: {version} matches {expected}")
 
 

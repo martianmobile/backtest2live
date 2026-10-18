@@ -9,7 +9,7 @@ Tracking: [milestones](https://github.com/martianmobile/backtest2live/milestones
 - **Package + CLI** — [#5](https://github.com/martianmobile/backtest2live/issues/5). `pip install backtest2live`, `bt2live <evaluator>`, `--json` on every command; the plugin wraps the CLI.
 - **`fill-gap`** — [#6](https://github.com/martianmobile/backtest2live/issues/6). Your backtest's resting orders re-run under a queue proxy on public order-book data: naive vs proxy fill rate, time to fill, misses by hour and volatility.
 - **Tests + CI** — [#3](https://github.com/martianmobile/backtest2live/issues/3). pytest on Python 3.9–3.13; the core stays dependency-free.
-- **Release** — [#11](https://github.com/martianmobile/backtest2live/issues/11). Closing a milestone publishes the version to GitHub Releases and PyPI.
+- **Release** — [#11](https://github.com/martianmobile/backtest2live/issues/11). Every merge to `main` with a `feat:` or `fix:` title publishes to GitHub Releases and PyPI.
 
 ## v0.3 — any backtest, any engine, shareable output (target mid-October 2026)
 
