@@ -1,3 +1,10 @@
+## [0.4.1](https://github.com/martianmobile/backtest2live/compare/v0.4.0...v0.4.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* tick inference follows a venue tick change inside the window ([#30](https://github.com/martianmobile/backtest2live/issues/30)) ([39f1df3](https://github.com/martianmobile/backtest2live/commit/39f1df31e5443921935fd36d14d74054959590e5))
+
 # [0.4.0](https://github.com/martianmobile/backtest2live/compare/v0.3.0...v0.4.0) (2026-10-15)
 
 
