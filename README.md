@@ -14,11 +14,11 @@ This is the public, MIT-licensed version of checks used in live crypto trading r
 
 A backtest usually flatters a strategy in three places:
 
-- **Resting orders.** Most engines fill a limit order the moment price touches it, as if it were first in line. On ten days of public BTCUSDT order-book data (March 2024), that rule grants three fills for every two a queue-aware rule allows (40.2% vs 27.2% of joins at the best price). The extra fills are not random: they are the touches that bounced without clearing the queue, and in the article's toy strategy they lose far less per fill than the fills a queue allows, so the backtest overstates edge as well as fill rate.
+- **Resting orders.** Most engines fill a limit order the moment price touches it, as if it were first in line. On ten days of public BTCUSDT best-bid/ask and trade data (March 2024), that rule grants three fills for every two a queue-aware rule allows (40.2% vs 27.2% of joins at the best price). The extra fills are not random: they are the touches that bounced without clearing the queue, and in a toy strategy in the article linked below they lose far less per fill than the fills a queue allows, so the backtest overstates edge as well as fill rate.
 - **Taker orders.** Bar-based backtests book market orders at the bar's price or the mid. A live order pays the spread, walks past the touch when it is larger than the displayed size, and arrives late.
 - **Parameter sweeps.** The best variant of a sweep is often the luckiest one. Without a stability check it looks like an edge.
 
-Each evaluator below checks one of these on your own files: `fill-gap` and `cost-gap` re-run your orders against public top-of-book and trade data, and `convergence` reads your sweep results. The full method, data, tables and a script to reproduce the resting-order result: [Fill at Touch Is a Backtest Lie](https://martianmobile.com/insights/article-4-fill-at-touch?utm_source=github&utm_medium=readme&utm_campaign=fill-gap).
+Each evaluator below checks one of these on your own files: `fill-gap` re-runs your resting orders against public top-of-book and trade data, `cost-gap` re-prices your taker orders against top-of-book at arrival, and `convergence` reads your sweep results. The full method, data, tables and a script to reproduce the resting-order result: [Fill at Touch Is a Backtest Lie](https://martianmobile.com/insights/article-4-fill-at-touch?utm_source=github&utm_medium=readme&utm_campaign=fill-gap).
 
 ---
 
