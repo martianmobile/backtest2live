@@ -8,7 +8,7 @@ run never reads as a verdict in CI.
 import argparse
 import sys
 
-from backtest2live import __version__, convergence, costgap, fillgap
+from backtest2live import __version__, convergence, costgap, fillgap, preflight
 
 EXIT_ERROR = 3
 
@@ -55,6 +55,15 @@ def build_parser():
     )
     costgap.add_arguments(g)
     g.set_defaults(run=costgap.run)
+
+    pf = sub.add_parser(
+        "preflight",
+        help="Every available check in one report: out-of-sample, execution realism, capacity, risk",
+        description="Run convergence, fill-gap and cost-gap on what you pass and write one report, each "
+                    "section pass / warn / fail / not run. Exit code: 0 pass, 1 warn, 2 fail, 3 error.",
+    )
+    preflight.add_arguments(pf)
+    pf.set_defaults(run=preflight.run)
     return p
 
 
