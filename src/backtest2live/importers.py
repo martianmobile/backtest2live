@@ -316,10 +316,10 @@ def _freqtrade_backtest(doc):
             ts = to_ms(o.get("order_filled_timestamp") or o.get("order_timestamp"))
             # the trade's profit, booked on its exit orders
             exit_pnl = profit / n_exit if profit is not None and not o.get("ft_is_entry") else None
-            typ = str(o.get("order_type") or "market").lower()
+            # Written as market: the result has only the fill time, not when a limit order
+            # started resting, so fill-gap has no queue life to replay. Cost-gap reads these.
             out.append(order(f"ft{ti:05d}-{oi}", t.get("pair"), ts, side_of(o.get("ft_order_side")),
-                             "limit" if typ == "limit" else "market", num(o.get("amount")),
-                             price=num(o.get("safe_price")) if typ == "limit" else None,
+                             "market", num(o.get("amount")),
                              fill_price=num(o.get("safe_price")), end_ts=ts, pnl=exit_pnl))
     if not out:
         raise SystemExit("error: the freqtrade result has no trades with orders")
@@ -329,7 +329,7 @@ def _freqtrade_backtest(doc):
 def hummingbot(path):
     """Hummingbot trade CSV (`data/trades_<strategy>.csv`): one row per fill, with symbol,
     timestamp, order_id, trade_type, order_type, price, amount. Rows of one order_id are
-    folded into one filled order at their average price."""
+    folded into one filled order at their average price, written as market (fills only)."""
     by_id = {}
     for r in read_csv(path):
         by_id.setdefault(pick(r, "order_id", "exchange_trade_id"), []).append(r)
@@ -339,12 +339,11 @@ def hummingbot(path):
         q = sum(num(pick(r, "amount")) or 0.0 for r in fills)
         v = sum((num(pick(r, "amount")) or 0.0) * (num(pick(r, "price")) or 0.0) for r in fills)
         f0 = fills[0]
-        typ = str(pick(f0, "order_type") or "").strip().lower()
-        typ = "market" if typ == "market" else "limit"  # LIMIT and LIMIT_MAKER rest
         vwap = v / q if q else None
+        # Written as market whatever order_type says: the trade CSV starts at the first fill,
+        # not the order's arrival, so a limit order's queue life is unknown. Cost-gap reads these.
         out.append(order(oid, pick(f0, "symbol", "market"), to_ms(pick(f0, "timestamp")),
-                         side_of(pick(f0, "trade_type", "side")), typ, q,
-                         price=vwap if typ == "limit" else None, fill_price=vwap,
+                         side_of(pick(f0, "trade_type", "side")), "market", q, fill_price=vwap,
                          end_ts=to_ms(pick(fills[-1], "timestamp"))))
     return out
 

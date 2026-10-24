@@ -80,7 +80,7 @@ def test_freqtrade_backtest_result(root, tmp_path):
     _, rows = _run(root, tmp_path, "freqtrade", "freqtrade_backtest.json")
     entry, exit_ = rows
     assert (entry["symbol"], entry["side"], entry["type"], entry["price"], entry["pnl"]) == \
-        ("BTC/USDT:USDT", "buy", "limit", "69924.7", "")
+        ("BTC/USDT:USDT", "buy", "market", "", "")  # fill time only: no queue life for fill-gap
     assert (exit_["side"], exit_["type"], exit_["fill_price"], exit_["pnl"]) == ("sell", "market", "69950.1", "0.254")
 
 
@@ -100,7 +100,7 @@ def test_hummingbot_fills_fold_per_order(root, tmp_path):
     o = _by_id(rows)
     b = o["buy-BTC-USDT-1"]
     assert (b["type"], b["size"], b["filled"], b["ts"], b["end_ts"]) == \
-        ("limit", "0.01", "1", str(T0 + 11_234), str(T0 + 12_000))
+        ("market", "0.01", "1", str(T0 + 11_234), str(T0 + 12_000))  # LIMIT fills: arrival unknown
     assert o["sell-BTC-USDT-2"]["type"] == "market"
 
 
