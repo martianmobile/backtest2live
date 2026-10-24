@@ -133,11 +133,14 @@ def load(path, capital):
 
 # --- metrics --------------------------------------------------------------------------------
 
-def daily(points):
-    """Last equity of each UTC day, with flat days filled forward."""
+def daily(points, fill=True):
+    """Last equity of each UTC day. With fill, every calendar day from first to last is present
+    (flat days filled forward); without it, only days that have a data point."""
     last = {}
     for t, e in points:
         last[t // DAY_MS] = e
+    if not fill:
+        return sorted(last.items())
     d0, d1 = min(last), max(last)
     out, e = [], points[0][1]
     for d in range(d0, d1 + 1):
@@ -159,7 +162,9 @@ def _dd(curve):
 
 
 def metrics(src, periods_per_year):
-    curve = daily(src["points"])
+    # a calendar-day series has 365 returns a year; any other count means the curve is sampled on
+    # trading days, so filling weekends would pad it with zero returns and miscount the years
+    curve = daily(src["points"], fill=periods_per_year == 365)
     start_eq = src["capital"]
     # an equity curve's first row is its starting point (a day-0 close); an order log starts from
     # --capital before the first order, so day 0 carries that day's P&L
@@ -371,7 +376,9 @@ def add_arguments(p):
     p.add_argument("--check", action="append", metavar="JSON",
                    help="A bt2live --json result (fill-gap, cost-gap, convergence) to cite on the sheet (repeatable)")
     p.add_argument("--periods-per-year", type=float, default=365.0,
-                   help="Days per year for annualizing (default 365, crypto trades every day; 252 for equities)")
+                   help="Return periods per year for annualizing (default 365: crypto, every calendar day, "
+                        "gaps filled forward). Any other value, e.g. 252, uses only the days that have a data "
+                        "point, for a curve sampled on trading days")
     p.add_argument("--title", help="Sheet title (default: the input file name)")
     p.add_argument("--out", metavar="PREFIX", help="Also write PREFIX.html and PREFIX.json")
     p.add_argument("--json", action="store_true", help="Print the sheet's JSON instead of Markdown")

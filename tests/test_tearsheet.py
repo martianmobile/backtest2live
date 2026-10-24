@@ -108,6 +108,26 @@ def test_cites_a_check_result(write_csv, tmp_path, capsys):
     assert d["checks"] == [{"schema": "backtest2live.fill-gap/1", "verdict": "OVERSTATED", "file": str(chk)}]
 
 
+def test_trading_day_curve_annualizes_on_its_own_days(write_csv, capsys):
+    # weekdays only (2024-01-01 is a Monday), 40 returns: with 252 the weekends are not padded in
+    import statistics
+    rows, vals, e, d = [], [100.0], 100.0, 0
+    rows.append(f"{T0},{e}")
+    while len(vals) < 41:
+        d += 1
+        if d % 7 in (5, 6):
+            continue
+        e *= 1.01 if len(vals) % 2 else 0.995
+        vals.append(e)
+        rows.append(f"{T0 + d * DAY},{e}")
+    p = write_csv("ts,equity\n" + "\n".join(rows))
+    m = sheet(capsys, p, "--provenance", "backtest", "--periods-per-year", "252")["metrics"]
+    rets = [vals[i] / vals[i - 1] - 1 for i in range(1, len(vals))]
+    assert m["days"] == 40
+    assert m["sharpe"] == pytest.approx(statistics.mean(rets) / statistics.stdev(rets) * 252 ** 0.5)
+    assert m["cagr"] == pytest.approx((vals[-1] / 100) ** (252 / 40) - 1)
+
+
 def test_iso_dates_and_gaps_fill_forward(write_csv, capsys):
     p = write_csv("date,value\n2024-01-01,100\n2024-01-04,103\n")
     m = sheet(capsys, p, "--provenance", "backtest")["metrics"]
