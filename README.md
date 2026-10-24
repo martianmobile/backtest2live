@@ -29,6 +29,7 @@ Each evaluator below checks one of these on your own files: `fill-gap` re-runs y
 | **`bt2live convergence`** | shipped | Read a variant parameter sweep → measure dispersion, IS/OOS rank stability, and parameter-plateau structure → verdict: **CONVERGED / ITERATE / KILL**. |
 | **`bt2live fill-gap`** | shipped | Re-run your backtest's resting orders under a queue proxy on top-of-book and trades → your fill rate vs the proxy's: **CONSISTENT / OVERSTATED**. |
 | **`bt2live cost-gap`** | shipped | Re-price your backtest's taker orders (market, or limits that cross) on top-of-book at arrival, with latency → what they would have paid vs what the backtest booked: **CONSISTENT / OVERSTATED**. The check for bar-based backtests. |
+| **`bt2live preflight`** | new | Every check above in one report: out-of-sample, execution realism, capacity, risk, each **pass / warn / fail / not run**. |
 
 Roadmap: [ROADMAP.md](ROADMAP.md) and the [milestones](https://github.com/martianmobile/backtest2live/milestones).
 
@@ -135,6 +136,16 @@ Same columns as `fill-gap`, with three additions: `type` (`market`/`limit`), `pr
 ### What the book can and cannot see
 
 Top-of-book shows the touch and its displayed size, nothing behind it. Size beyond the touch is priced one tick worse per displayed-size slice, the least impact consistent with the feed, so the cost is a floor, not a measurement. Only your own live fills settle it.
+
+---
+
+## `preflight`: every check in one report
+
+```bash
+bt2live preflight --results sweep.csv --orders orders.csv --venue bybit-linear --pair BTCUSDT --out preflight
+```
+
+Runs `convergence` on `--results` and `fill-gap` + `cost-gap` on `--orders` (same market-data flags), then writes one report in four sections, the shape of a live desk's review gate: **out-of-sample**, **execution realism**, **capacity**, **risk**. Each is marked pass / warn / fail / not run, says why a check did not run, and states what a local check on public data cannot see. Capacity and risk have no check yet and always read *not run*. A log without a `type` column holds one kind of order, so only one of fill-gap (it has a fill flag or end time) and cost-gap runs on it; add `type` (market/limit) to run both. `--out preflight` writes `preflight.md` and `preflight.json`. Exit code: `0` every check that ran passed, `1` a warning (ITERATE, or cost-gap without P&L), `2` a failure, `3` error or no check ran.
 
 ---
 
