@@ -35,7 +35,7 @@ Exit code: `0` CONSISTENT or REPORTED (no `pnl` column), `1` OVERSTATED, `3` err
 Relay the verdict, the cost table and the latency table. Then:
 - **OVERSTATED** → say what share of the backtest's P&L the execution cost removes, and whether it comes from the spread, from orders larger than the touch, or from latency (the latency table shows the slope). Suggest re-running the backtest with a spread-and-latency fill rule before trusting its returns.
 - **CONSISTENT / REPORTED** → the mid-fill assumption is not the main risk at this size and latency on this pair. Say so plainly; a clean result is also an answer.
-- Always: top-of-book is a floor on impact, not a measurement (nothing behind the touch is visible; size beyond it is priced one tick worse per displayed-size slice). Only the user's live fills settle it. The report ends with a link to a calibrated check against live fills; keep it in the relay.
+- Always: say which depth the report used (`book_depth`). `l2` (Bybit venue or `--l2`) walks the real levels behind the touch; `l1-floor` (Binance venue or `--book`) sees nothing behind the touch and prices size beyond it one tick worse per displayed-size slice, a floor on impact, not a measurement. Only the user's live fills settle it. The report ends with a link to a calibrated check against live fills; keep it in the relay.
 - If the log has resting limit orders, the report counts them as skipped: point the user at `bt2live fill-gap` for those.
 
 Never change the CLI's numbers; interpret them.

@@ -11,9 +11,12 @@ Two newline-JSON day-file formats are recognised per line:
 
 A level with size 0 is removed. One row is emitted whenever the best bid or
 ask (price or displayed size) changes, which is the bookTicker shape the
-evaluators already consume. stdlib only; the file is streamed line by line.
+evaluators already consume. With ``depth=K`` each row also carries the K best
+levels per side as they stand at that change (cost-gap walks them): offsets
+from the touch and sizes, float32, NaN-padded. The file is streamed line by line.
 """
 
+import bisect
 import gzip
 import io
 import itertools
@@ -67,9 +70,34 @@ def _event(obj):
     return None
 
 
-def replay_l1(lines):
-    """Stream L2 messages → dict of int64 µs times and float best bid/ask price and size."""
+DEPTH = 20             # levels per side kept for cost-gap
+CACHE_VERSION = "l1v2"  # v2 adds the depth arrays; bump when the cached arrays change
+DEPTH_KEYS = ("bid_lv_off", "bid_lv_qty", "ask_lv_off", "ask_lv_qty")
+
+
+class _Levels:
+    """Growable float32 (rows, K) buffers: a Python list per row would cost ~2 GB a day."""
+
+    def __init__(self, k):
+        self.k, self.n, self.bufs = k, 0, [np.full((65_536, k), np.nan, np.float32) for _ in DEPTH_KEYS]
+
+    def add(self, b_off, b_qty, a_off, a_qty):
+        if self.n == len(self.bufs[0]):
+            self.bufs = [np.concatenate([b, np.full_like(b, np.nan)]) for b in self.bufs]
+        for buf, v in zip(self.bufs, (b_off, b_qty, a_off, a_qty)):
+            buf[self.n, :len(v)] = v
+        self.n += 1
+
+    def arrays(self):
+        return {k: b[:self.n] for k, b in zip(DEPTH_KEYS, self.bufs)}
+
+
+def replay_l1(lines, depth=0):
+    """Stream L2 messages → dict of int64 µs times and float best bid/ask price and size
+    (plus the DEPTH_KEYS arrays when depth > 0)."""
     bids, asks = {}, {}
+    bsorted, asorted = [], []  # ascending prices, kept only when depth > 0
+    lv = _Levels(depth) if depth else None
     best_b = best_a = None
     rows_t, rows = [], []
     last = None
@@ -92,22 +120,34 @@ def replay_l1(lines):
             asks = {float(p): float(s) for p, s, *_ in a_lv if float(s) > 0}
             best_b = max(bids) if bids else None
             best_a = min(asks) if asks else None
+            if lv:
+                bsorted, asorted = sorted(bids), sorted(asks)
         else:
             for p, s, *_ in b_lv:
                 p, s = float(p), float(s)
                 if s <= 0:
-                    if bids.pop(p, None) is not None and p == best_b:
-                        best_b = max(bids) if bids else None
+                    if bids.pop(p, None) is not None:
+                        if lv:
+                            del bsorted[bisect.bisect_left(bsorted, p)]
+                        if p == best_b:
+                            best_b = max(bids) if bids else None
                 else:
+                    if lv and p not in bids:
+                        bisect.insort(bsorted, p)
                     bids[p] = s
                     if best_b is None or p > best_b:
                         best_b = p
             for p, s, *_ in a_lv:
                 p, s = float(p), float(s)
                 if s <= 0:
-                    if asks.pop(p, None) is not None and p == best_a:
-                        best_a = min(asks) if asks else None
+                    if asks.pop(p, None) is not None:
+                        if lv:
+                            del asorted[bisect.bisect_left(asorted, p)]
+                        if p == best_a:
+                            best_a = min(asks) if asks else None
                 else:
+                    if lv and p not in asks:
+                        bisect.insort(asorted, p)
                     asks[p] = s
                     if best_a is None or p < best_a:
                         best_a = p
@@ -118,23 +158,37 @@ def replay_l1(lines):
             rows_t.append(ts)
             rows.append(top)
             last = top
+            if lv:
+                kb = bsorted[:-depth - 1:-1]  # best first
+                ka = asorted[:depth]
+                lv.add([p - best_b for p in kb], [bids[p] for p in kb],
+                       [p - best_a for p in ka], [asks[p] for p in ka])
     if not rows:
         raise SystemExit("error: no top-of-book rows could be replayed from the L2 file")
     arr = np.asarray(rows, dtype=np.float64)
-    return {"t": np.asarray(rows_t, dtype=np.int64) * 1000, "bid_px": arr[:, 0], "bid_qty": arr[:, 1],
-            "ask_px": arr[:, 2], "ask_qty": arr[:, 3]}
+    out = {"t": np.asarray(rows_t, dtype=np.int64) * 1000, "bid_px": arr[:, 0], "bid_qty": arr[:, 1],
+           "ask_px": arr[:, 2], "ask_qty": arr[:, 3]}
+    if lv:
+        out.update(lv.arrays())
+    return out
 
 
-def l1_from_file(path, cache_path=None, log=print):
-    """Replay once and cache the top-of-book arrays next to the cache root as .npz."""
+L1_KEYS = ("t", "bid_px", "bid_qty", "ask_px", "ask_qty")
+
+
+def l1_from_file(path, cache_path=None, log=print, with_depth=False):
+    """Replay once and cache the arrays as .npz. A cache always holds DEPTH levels, so fill-gap and
+    cost-gap share one replay; fill-gap reads only the top-of-book arrays (npz loads lazily)."""
+    keys = L1_KEYS + (DEPTH_KEYS if with_depth else ())
     if cache_path and os.path.exists(cache_path):
         z = np.load(cache_path)
-        return {k: z[k] for k in ("t", "bid_px", "bid_qty", "ask_px", "ask_qty")}
-    log(f"replaying L2 → top-of-book: {os.path.basename(path)}")
-    book = replay_l1(_open_lines(path))
+        return {k: z[k] for k in keys}
+    depth = DEPTH if (with_depth or cache_path) else 0
+    log(f"replaying L2 → top-of-book{' and depth' if depth else ''}: {os.path.basename(path)}")
+    book = replay_l1(_open_lines(path), depth=depth)
     if cache_path:
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         tmp = cache_path + ".part.npz"
         np.savez(tmp, **book)
         os.replace(tmp, cache_path)  # atomic: a killed run never leaves a half-written cache
-    return book
+    return {k: book[k] for k in keys}

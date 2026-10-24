@@ -192,3 +192,71 @@ def test_venue_tick_change_prices_each_day_on_its_own_tick(write_csv, monkeypatc
     assert d["counts"]["taker"] == 2 and d["counts"]["beyond_touch"] == 2
     assert d["tick"] == 0.01
     assert d["cost_bps"]["mean"] == pytest.approx(5.4924, rel=1e-4)  # both days on 0.1 would give 7.7421
+
+
+# --- L2 depth: the real levels behind the touch (#28) ---------------------------------
+
+from backtest2live.costgap import sim  # noqa: E402
+from backtest2live.fillgap import l2  # noqa: E402
+
+DEEP_L2 = [
+    '{"topic":"orderbook.500.BTCUSDT","type":"snapshot","ts":%d,"data":{"b":[["100.0","5"]],"a":[["100.1","1"],["100.3","5"]],"u":1,"seq":1}}',
+    '{"topic":"orderbook.500.BTCUSDT","type":"delta","ts":%d,"data":{"b":[["100.0","6"]],"a":[],"u":2,"seq":2}}',
+]
+
+
+def _deep_file(tmp_path):
+    f = tmp_path / "2024-03-30_BTCUSDT_ob500.data"
+    f.write_text("\n".join(l % (T + t) for l, t in zip(DEEP_L2, (1000, 9000))) + "\n")
+    return f
+
+
+def test_replay_records_levels_behind_the_touch(tmp_path):
+    b = l2.replay_l1(l2._open_lines(str(_deep_file(tmp_path))), depth=3)
+    assert b["ask_lv_off"].shape == (2, 3)
+    assert b["ask_lv_off"][0, :2] == pytest.approx([0.0, 0.2]) and np.isnan(b["ask_lv_off"][0, 2])
+    assert list(b["ask_lv_qty"][0, :2]) == [1.0, 5.0]
+    assert list(b["bid_lv_qty"][1, :1]) == [6.0]
+
+
+def test_l2_source_walks_the_real_second_level(tmp_path, write_csv, capsys):
+    # 3 units against 1 at 100.1 and 5 at 100.3: 1 @ 100.1 + 2 @ 100.3, not the floor's 100.1/100.2/100.3
+    p = write_csv(orders(["a,2000,buy,3,market,,100.05"]), "o.csv")
+    rc, d = run(capsys, p, ["--l2", str(_deep_file(tmp_path))], "--tick", "0.1")
+    assert d["book_depth"] == "l2" and d["counts"]["beyond_touch"] == 1
+    vwap = (100.1 + 2 * 100.3) / 3
+    assert d["cost_bps"]["mean"] == pytest.approx((vwap - 100.05) / 100.05 * 1e4, rel=1e-6)
+
+
+def test_l1_book_keeps_the_floor_and_names_it(write_csv, book, capsys):
+    p = write_csv(orders(["a,2000,buy,3,market,,100.05"]), "o.csv")
+    rc, d = run(capsys, p, book, "--tick", "0.1")
+    assert d["book_depth"] == "l1-floor"
+    cli.main(["cost-gap", p, *book, "--tick", "0.1"])
+    assert "flat-depth floor (top-of-book only)" in capsys.readouterr().out
+
+
+def _book2(ask_off, ask_qty):
+    k = len(ask_off)
+    return {"t": np.array([0], np.int64), "bid_px": np.array([99.9]), "bid_qty": np.array([1.0]),
+            "ask_px": np.array([100.0]), "ask_qty": np.array([ask_qty[0]], np.float64),
+            "ask_lv_off": np.array([ask_off], np.float32), "ask_lv_qty": np.array([ask_qty], np.float32),
+            "bid_lv_off": np.zeros((1, k), np.float32), "bid_lv_qty": np.ones((1, k), np.float32)}
+
+
+def _one(size, limit=np.nan):
+    return {"t": np.array([0], np.int64), "buy": np.array([True]), "size": np.array([size], np.float64),
+            "limit": np.array([limit]), "fill_px": np.array([np.nan])}
+
+
+def test_depth_walk_falls_back_to_the_floor_past_the_deepest_level():
+    # levels 100.0 x 1, 100.5 x 2; 5 units: 1 + 2 recorded, then 2 more at 100.6 and 100.7 (slices of 2 → one slice)
+    r = sim.price_takers(_book2([0.0, 0.5], [1.0, 2.0]), _one(5.0), tick=0.1)
+    assert r["filled"][0] == pytest.approx(5.0) and r["past_depth"][0]
+    assert r["vwap"][0] == pytest.approx((100.0 + 2 * 100.5 + 2 * 100.6) / 5)
+
+
+def test_depth_walk_stops_at_the_limit():
+    r = sim.price_takers(_book2([0.0, 0.5], [1.0, 2.0]), _one(5.0, limit=100.4), tick=0.1)
+    assert r["filled"][0] == pytest.approx(1.0) and r["unfilled"][0] == pytest.approx(4.0)
+    assert not r["past_depth"][0]
