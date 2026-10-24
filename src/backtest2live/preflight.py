@@ -7,7 +7,7 @@ the existing evaluators run in-process; preflight adds no math of its own.
 
     bt2live preflight --results sweep.csv --orders orders.csv --venue bybit-linear --pair BTCUSDT
 
-Exit code: 0 every check that ran passed, 1 a warning, 2 a failure, 3 error.
+Exit code: 0 every check that ran passed, 1 a warning, 2 a failure, 3 error or no check ran.
 """
 
 import contextlib
@@ -196,7 +196,7 @@ def add_arguments(p):
     p.add_argument("--json", action="store_true", help="Print the JSON instead of Markdown")
 
 
-EXIT = {"pass": 0, "not run": 0, "warn": 1, "fail": 2}
+EXIT = {"pass": 0, "not run": 3, "warn": 1, "fail": 2}  # no check ran: never reads as a pass
 
 
 def run(args):

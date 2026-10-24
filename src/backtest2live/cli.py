@@ -60,7 +60,7 @@ def build_parser():
         "preflight",
         help="Every available check in one report: out-of-sample, execution realism, capacity, risk",
         description="Run convergence, fill-gap and cost-gap on what you pass and write one report, each "
-                    "section pass / warn / fail / not run. Exit code: 0 pass, 1 warn, 2 fail, 3 error.",
+                    "section pass / warn / fail / not run. Exit code: 0 pass, 1 warn, 2 fail, 3 error or no check ran.",
     )
     preflight.add_arguments(pf)
     pf.set_defaults(run=preflight.run)

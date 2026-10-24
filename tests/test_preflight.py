@@ -102,3 +102,4 @@ def test_a_check_that_cannot_run_says_why(write_csv, capsys):
     rc, d = run(capsys, "--orders", write_csv(log, "o.csv"))  # no market data
     fg, cg = section(d, "execution")["checks"]
     assert cg["status"] == "not run" and "--venue" in cg["reason"]
+    assert d["status"] == "not run" and rc == cli.EXIT_ERROR  # no verdict never reads as a pass
