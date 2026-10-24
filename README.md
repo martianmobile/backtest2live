@@ -134,7 +134,7 @@ Same columns as `fill-gap`, with three additions: `type` (`market`/`limit`), `pr
 
 ### What the book can and cannot see
 
-Top-of-book shows the touch and its displayed size, nothing behind it. Size beyond the touch is priced one tick worse per displayed-size slice, the least impact consistent with the feed, so the cost is a floor, not a measurement. Only your own live fills settle it.
+With an L2 source (`--venue bybit-linear` / `bybit-inverse`, or `--l2`), size beyond the touch walks the real levels: the 20 best per side as they stood at the last top-of-book change before the order arrived, then one tick worse per the deepest level's size past them. With top-of-book only (`--venue binance-um`, `--book`), nothing behind the touch is visible: size beyond it is priced one tick worse per displayed-size slice, the least impact consistent with the feed, so the cost is a floor, not a measurement. The report says which it used. Hidden size and other orders arriving with yours are invisible either way; only your own live fills settle it.
 
 ---
 

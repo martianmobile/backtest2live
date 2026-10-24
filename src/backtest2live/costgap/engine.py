@@ -101,7 +101,9 @@ def evaluate(args, log=print):
     tick = args.tick
 
     tick_change = None
-    fields = ("status", "t_arr", "baseline", "vwap", "filled", "unfilled", "beyond_touch", "cost_bps", "range_bps")
+    fields = ("status", "t_arr", "baseline", "vwap", "filled", "unfilled", "beyond_touch", "past_depth", "cost_bps",
+              "range_bps")
+    depth = False
     out = {k: None for k in fields}
     sweep = {ms: np.full(n, np.nan) for ms in LATENCY_SWEEP_MS}
 
@@ -119,7 +121,9 @@ def evaluate(args, log=print):
         if args.book:
             book, bname = data.load_user_book(args.book), os.path.basename(args.book)
         else:
-            book, bname = data.load_l2_files(args.l2, log=log), ", ".join(os.path.basename(f) for f in args.l2)
+            book = data.load_l2_files(args.l2, log=log, with_depth=True)
+            bname = ", ".join(os.path.basename(f) for f in args.l2)
+        depth = "ask_lv_qty" in book
         tick = tick or data.infer_tick(book)
         put(np.arange(n), _price(book, orders, np.arange(n), tick, latency_us))
         source = f"your file ({bname})"
@@ -131,7 +135,8 @@ def evaluate(args, log=print):
         for d in np.unique(day_of):
             idx = np.flatnonzero(day_of == d)
             days = data.utc_days(int(t_arr[idx].min()), int(t_arr[idx].max()) + int(max(LATENCY_SWEEP_MS)) * 1000)
-            book, _ = data.load_venue(args.venue, pair, days, offline=args.offline, log=log)
+            book, _ = data.load_venue(args.venue, pair, days, offline=args.offline, log=log, with_depth=True)
+            depth = "ask_lv_qty" in book
             day_tick = args.tick or data.day_tick(book, days[0])  # per day: a venue can change the tick mid-window
             day_ticks.append((days[0], day_tick))
             run_tick = args.tick or min(data.day_tick(book, x) for x in days)  # finest of the days loaded
@@ -143,7 +148,7 @@ def evaluate(args, log=print):
                 f"each day is priced on its own tick")
         source = data.venue_source(args.venue, pair)
 
-    return aggregate(orders, out, sweep, args, tick, source, tick_change)
+    return aggregate(orders, out, sweep, args, tick, source, tick_change, depth)
 
 
 def _stats(x):
@@ -154,7 +159,7 @@ def _stats(x):
             "p90": float(np.quantile(x, 0.9))}
 
 
-def aggregate(orders, r, sweep, args, tick, source, tick_change=None):
+def aggregate(orders, r, sweep, args, tick, source, tick_change=None, depth=False):
     st = r["status"]
     taker = st == sim.TAKER
     cost = r["cost_bps"]
@@ -197,6 +202,7 @@ def aggregate(orders, r, sweep, args, tick, source, tick_change=None):
         "window_utc": [int(t.min()), int(t.max())],
         "tick": tick,
         "tick_change": tick_change,
+        "book_depth": "l2" if depth else "l1-floor",
         "latency_ms": args.latency_ms,
         "tolerance": args.tolerance,
         "baseline": orders["baseline_source"],
@@ -207,6 +213,7 @@ def aggregate(orders, r, sweep, args, tick, source, tick_change=None):
             "resting": int((st == sim.RESTING).sum()),
             "no_data": int((st == sim.NO_DATA).sum()),
             "beyond_touch": int(r["beyond_touch"].sum()),
+            "past_recorded_depth": int(r["past_depth"].sum()),
             "partially_unfilled": int((taker & (r["unfilled"] > 1e-12)).sum()),
         },
         "cost_bps": _stats(cost[taker]),
