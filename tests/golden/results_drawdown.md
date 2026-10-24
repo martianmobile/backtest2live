@@ -20,7 +20,10 @@ Ranking metric: `max_drawdown` (lower is better) · Top-3 of 6 variants
 
 ## Parameter-Space Check
 
-No parameter columns detected — cannot assess clustering. Pass parameter columns or check column inference.
+- `window`: top-K at [20, 30, 40] — contiguous
+
+[ ] Single isolated peak — fragile, retest with more samples
+[x] Plateau region — robust, safe to deploy
 
 Sample sizes OK — all top-3 variants ≥ 200 on `n_trades`.
 
