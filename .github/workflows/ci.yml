@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # ubuntu-latest is 26.04, which setup-python has no 3.9 build for; 24.04 still has every version
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -35,8 +36,8 @@ jobs:
       - run: pytest -q
 
   min-deps:
-    # the lowest numpy/pandas the data extra allows
-    runs-on: ubuntu-latest
+    # the lowest numpy/pandas the data extra allows; 24.04 for Python 3.9 (see test)
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
