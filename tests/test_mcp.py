@@ -90,3 +90,14 @@ def test_stdout_carries_only_protocol(root):
     lines = p.stdout.splitlines()
     assert p.returncode == 0 and len(lines) == 2
     assert json.loads(lines[1])["result"]["structuredContent"]["verdict"] == "CONVERGED"
+
+
+def test_non_finite_numbers_become_null(monkeypatch):
+    doc = {"a": float("nan"), "b": [1.0, float("inf")], "c": {"d": float("-inf")}}
+    monkeypatch.setattr(mcp, "call", lambda tool, args: ("md", doc))
+    out = io.StringIO()
+    mcp.serve(io.StringIO(json.dumps(call("convergence", {})) + "\n"), out)
+    line = out.getvalue()
+    assert "NaN" not in line and "Infinity" not in line
+    res = json.loads(line)["result"]
+    assert res["structuredContent"] == {"a": None, "b": [1.0, None], "c": {"d": None}}

@@ -15,6 +15,7 @@ Nothing is sent to Martian Mobile. Pure standard library.
 
 import contextlib
 import json
+import math
 import sys
 
 from backtest2live import __version__
@@ -132,6 +133,16 @@ def call(tool, args):
         return report.markdown(res), report.to_json(res)
 
 
+def _finite(v):
+    if isinstance(v, float) and not math.isfinite(v):
+        return None
+    if isinstance(v, dict):
+        return {k: _finite(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_finite(x) for x in v]
+    return v
+
+
 def _result(tool, args):
     try:
         md, doc = call(tool, args)
@@ -144,7 +155,7 @@ def _result(tool, args):
     except Exception as e:  # as in cli.main: a crash in one call must not take the server down
         print(f"{tool}: {type(e).__name__}: {e}", file=sys.stderr)
         return {"content": [{"type": "text", "text": f"error: {type(e).__name__}: {e}"}], "isError": True}
-    doc = json.loads(json.dumps(doc, default=str))  # numpy scalars, NaN-free plain JSON
+    doc = _finite(json.loads(json.dumps(doc, default=str)))  # numpy scalars → plain JSON, NaN/inf → null
     return {"content": [{"type": "text", "text": md},
                         {"type": "text", "text": json.dumps(doc, indent=2, ensure_ascii=False)}],
             "structuredContent": doc, "isError": False}
@@ -190,7 +201,7 @@ def serve(stdin=None, stdout=None):
             resp = handle(msg) if isinstance(msg, dict) else \
                 {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "invalid request"}}
         if resp is not None:
-            stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
+            stdout.write(json.dumps(resp, ensure_ascii=False, allow_nan=False) + "\n")
             stdout.flush()
 
 
