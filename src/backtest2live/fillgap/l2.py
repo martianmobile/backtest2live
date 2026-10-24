@@ -177,18 +177,19 @@ L1_KEYS = ("t", "bid_px", "bid_qty", "ask_px", "ask_qty")
 
 
 def l1_from_file(path, cache_path=None, log=print, with_depth=False):
-    """Replay once and cache the arrays as .npz. A cache always holds DEPTH levels, so fill-gap and
-    cost-gap share one replay; fill-gap reads only the top-of-book arrays (npz loads lazily)."""
+    """Replay once and cache the arrays as .npz. With with_depth (cost-gap) the replay keeps DEPTH
+    levels per side and the cache is compressed; without it only top-of-book is kept, so fill-gap
+    pays nothing for depth. A depth cache also serves an L1 request (npz members load lazily)."""
     keys = L1_KEYS + (DEPTH_KEYS if with_depth else ())
     if cache_path and os.path.exists(cache_path):
         z = np.load(cache_path)
         return {k: z[k] for k in keys}
-    depth = DEPTH if (with_depth or cache_path) else 0
+    depth = DEPTH if with_depth else 0
     log(f"replaying L2 → top-of-book{' and depth' if depth else ''}: {os.path.basename(path)}")
     book = replay_l1(_open_lines(path), depth=depth)
     if cache_path:
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         tmp = cache_path + ".part.npz"
-        np.savez(tmp, **book)
+        (np.savez_compressed if depth else np.savez)(tmp, **book)
         os.replace(tmp, cache_path)  # atomic: a killed run never leaves a half-written cache
     return {k: book[k] for k in keys}

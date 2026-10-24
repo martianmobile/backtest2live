@@ -182,7 +182,7 @@ def test_venue_tick_change_prices_each_day_on_its_own_tick(write_csv, monkeypatc
 
     books = {T: book(T, [100.0, 100.1, 100.2, 100.1, 100.0, 100.1] * 2, 0.1),
              day2: book(day2, [100.0, 100.01, 100.02, 100.03, 100.02, 100.01] * 2, 0.01)}
-    monkeypatch.setattr(data, "load_venue", lambda venue, pair, days, offline, log:
+    monkeypatch.setattr(data, "load_venue", lambda venue, pair, days, offline, log, with_depth=False:
                         (books[T if days[0].isoformat() == "2024-03-30" else day2], None))
     # 2 units against 1 at the touch: the second unit walks one tick, 0.1 on day 1 and 0.01 on day 2
     p = write_csv(orders(["a,1500,buy,2,market,,", f"b,{86_400_000 + 1500},buy,2,market,,"],

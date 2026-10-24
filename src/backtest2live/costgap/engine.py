@@ -135,7 +135,7 @@ def evaluate(args, log=print):
         for d in np.unique(day_of):
             idx = np.flatnonzero(day_of == d)
             days = data.utc_days(int(t_arr[idx].min()), int(t_arr[idx].max()) + int(max(LATENCY_SWEEP_MS)) * 1000)
-            book, _ = data.load_venue(args.venue, pair, days, offline=args.offline, log=log)
+            book, _ = data.load_venue(args.venue, pair, days, offline=args.offline, log=log, with_depth=True)
             depth = "ask_lv_qty" in book
             day_tick = args.tick or data.day_tick(book, days[0])  # per day: a venue can change the tick mid-window
             day_ticks.append((days[0], day_tick))

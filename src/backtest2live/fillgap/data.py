@@ -360,14 +360,24 @@ def _bybit_book_file(category, pair, day, offline, log):
     raise SystemExit(f"error: no Bybit {category} order-book file for {pair} on {day} ({last})")
 
 
-def load_bybit(category, pair, days, offline=False, log=print):
+def _bybit_cache(bf, with_depth):
+    """Top-of-book and depth replays cache separately; an existing depth cache also serves top-of-book."""
+    from backtest2live.fillgap import l2
+    depth_cache = f"{bf}.{l2.CACHE_VERSION}d.npz"
+    if with_depth or os.path.exists(depth_cache):
+        return depth_cache
+    return f"{bf}.{l2.CACHE_VERSION}.npz"
+
+
+def load_bybit(category, pair, days, offline=False, log=print, with_depth=False):
     """Bybit public L2 archive replayed to top-of-book, plus the public trades CSV, for the UTC days.
-    The book carries the l2.DEPTH best levels per side at each top-of-book change (cost-gap walks them)."""
+    With with_depth (cost-gap) the book also carries the l2.DEPTH best levels per side at each
+    top-of-book change."""
     from backtest2live.fillgap import l2
     books, trades = [], []
     for d in days:
         bf = _bybit_book_file(category, pair, d, offline, log)
-        books.append(l2.l1_from_file(bf, cache_path=f"{bf}.{l2.CACHE_VERSION}.npz", log=log, with_depth=True))
+        books.append(l2.l1_from_file(bf, cache_path=_bybit_cache(bf, with_depth), log=log, with_depth=with_depth))
         tname = f"{pair}{d.isoformat()}.csv.gz"
         tf = _download(f"{BYBIT_TRADES_ROOT}/{pair}/{tname}",
                        os.path.join(cache_dir(), "bybit", "trading", pair, tname), offline, log)
@@ -381,12 +391,12 @@ def load_bybit(category, pair, days, offline=False, log=print):
     return book, trd
 
 
-def load_venue(venue, pair, days, offline=False, log=print):
+def load_venue(venue, pair, days, offline=False, log=print, with_depth=False):
     """Dispatch on --venue. Returns (book, trades) in the normalized arrays."""
     if venue == "binance-um":
         return load_binance_um(pair, days, offline=offline, log=log)
     if venue.startswith("bybit-"):
-        return load_bybit(venue.split("-", 1)[1], pair, days, offline=offline, log=log)
+        return load_bybit(venue.split("-", 1)[1], pair, days, offline=offline, log=log, with_depth=with_depth)
     raise SystemExit(f"error: unknown venue {venue!r}")
 
 
