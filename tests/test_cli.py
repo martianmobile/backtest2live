@@ -18,7 +18,8 @@ GOLDEN = [
 
 @pytest.mark.parametrize("path,extra,golden,code", GOLDEN)
 def test_report_matches_pre_package_analyzer(root, capsys, path, extra, golden, code):
-    # Goldens were produced by plugins/strategy-evaluation/.../analyze.py before the move.
+    # Goldens were produced by plugins/strategy-evaluation/.../analyze.py before the move. results_drawdown.md
+    # since lists `window` as a parameter: the keyword rule read it as a metric (`win`), fixed in #1.
     rc = cli.main(["convergence", str(root / path), "--date", "2026-06-06", *extra])
     out = capsys.readouterr().out
     assert rc == code

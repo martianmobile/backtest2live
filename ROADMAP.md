@@ -21,7 +21,7 @@ The toolkit checks artifacts a backtest already produces; the order-log schema i
 - **MCP server** — [#8](https://github.com/martianmobile/backtest2live/issues/8). The checks, exposed to any AI assistant.
 - **Deflated Sharpe + PBO** — [#2](https://github.com/martianmobile/backtest2live/issues/2). Is the winner real, or did N variants overfit?
 - **Preflight report** — [#9](https://github.com/martianmobile/backtest2live/issues/9). The checks in one document.
-- **Cardinality-based column inference** — [#1](https://github.com/martianmobile/backtest2live/issues/1). Classify parameters vs metrics by cardinality, not keywords (today `window` reads as a metric because it contains `win`).
+- **Cardinality-based column inference** — [#1](https://github.com/martianmobile/backtest2live/issues/1). Classify parameters vs metrics by cardinality, not keywords, and `--describe` to show the inference.
 
 ## Later (directional)
 
