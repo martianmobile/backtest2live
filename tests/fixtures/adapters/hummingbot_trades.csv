@@ -1,0 +1,4 @@
+exchange_trade_id,config_file_path,strategy,market,symbol,base_asset,quote_asset,timestamp,order_id,trade_type,order_type,price,amount,leverage,trade_fee,trade_fee_in_quote,position
+t1,conf_pmm_1.yml,pure_market_making,binance_perpetual,BTC-USDT,BTC,USDT,1711756871234,buy-BTC-USDT-1,BUY,LIMIT_MAKER,69924.7,0.004,1,{},0.0,NIL
+t2,conf_pmm_1.yml,pure_market_making,binance_perpetual,BTC-USDT,BTC,USDT,1711756872000,buy-BTC-USDT-1,BUY,LIMIT_MAKER,69924.7,0.006,1,{},0.0,NIL
+t3,conf_pmm_1.yml,pure_market_making,binance_perpetual,BTC-USDT,BTC,USDT,1711756900000,sell-BTC-USDT-2,SELL,MARKET,69925.1,0.01,1,{},0.0,NIL
