@@ -29,6 +29,7 @@ Each evaluator below checks one of these on your own files: `fill-gap` re-runs y
 | **`bt2live convergence`** | shipped | Read a variant parameter sweep → measure dispersion, IS/OOS rank stability, and parameter-plateau structure → verdict: **CONVERGED / ITERATE / KILL**. |
 | **`bt2live fill-gap`** | shipped | Re-run your backtest's resting orders under a queue proxy on top-of-book and trades → your fill rate vs the proxy's: **CONSISTENT / OVERSTATED**. |
 | **`bt2live cost-gap`** | shipped | Re-price your backtest's taker orders (market, or limits that cross) on top-of-book at arrival, with latency → what they would have paid vs what the backtest booked: **CONSISTENT / OVERSTATED**. The check for bar-based backtests. |
+| **`bt2live import`** | new | Convert an engine's export (NautilusTrader, LEAN, backtrader, vectorbt, freqtrade, Hummingbot) into the order log the checks read. |
 
 Roadmap: [ROADMAP.md](ROADMAP.md) and the [milestones](https://github.com/martianmobile/backtest2live/milestones).
 
@@ -54,6 +55,46 @@ pip install 'backtest2live[data]'
 ```
 
 Then ask *"are these variants converged?"* or run `/convergence results.csv --metric sharpe_oos`. The skill installs the CLI if it is missing.
+
+---
+
+## `import`: your engine's export, as the order log the checks read
+
+`fill-gap` and `cost-gap` read one order-log shape, whatever engine wrote the backtest. `bt2live import` writes it from each engine's own export:
+
+```bash
+bt2live import nautilus orders_report.csv -o orders.csv
+bt2live import freqtrade backtest-result.json -o orders.csv --split   # one file per pair
+```
+
+| Engine | Pass this file | Feeds |
+|---|---|---|
+| `nautilus` | `trader.generate_orders_report().to_csv(...)` | fill-gap (limit orders, with fill flag and end time), cost-gap (market orders) |
+| `lean` | the backtest's `<algorithm>-order-events.json` | fill-gap, cost-gap |
+| `freqtrade` | a backtest result `.json` (unzipped), or an `orders` table CSV from a dry-run or live database | cost-gap; fill-gap from the orders CSV (canceled orders included) |
+| `hummingbot` | `data/trades_<strategy>.csv` | cost-gap (fills only) |
+| `vectorbt` | `pf.orders.records_readable.to_csv(...)` | cost-gap (fills at the given price) |
+| `backtrader` | the `Transactions` analyzer, `get_analysis()` dumped to JSON, or as a CSV | cost-gap (fills only) |
+
+A trade list holds fills only: every row is filled, so it feeds cost-gap and has nothing for fill-gap to re-run. The freqtrade orders export has no pair column; the pair is parsed from the dry-run order id. In dry-run, freqtrade's `filled` comes from its own simulator, so fill-gap compares that simulator with the queue proxy. `--symbol` keeps one instrument; `--split` writes one file per instrument, because the checks run one `--pair` at a time.
+
+**Order-log schema** (`backtest2live.orders/1`), one row per order:
+
+| Column | Meaning |
+|---|---|
+| `order_id`, `symbol` | the engine's id and instrument name |
+| `ts` | arrival time, epoch ms UTC |
+| `side`, `type` | `buy`/`sell`, `market`/`limit` |
+| `price` | the limit (blank for market orders) |
+| `size`, `fill_qty` | order size and the size the backtest filled, base units |
+| `filled` | 1 if the backtest filled any of it |
+| `fill_price` | average price the backtest booked |
+| `end_ts` | end of the order's life (fill, cancel, expiry), epoch ms |
+| `pnl` | P&L the backtest booked on the order, when the engine reports it |
+
+fill-gap skips the market rows and cost-gap the resting ones, so one file serves both. Any CSV with these columns works, whatever wrote it.
+
+**Results schema** (what `convergence` reads): one row per variant, an id column (`variant_id`), one column per swept parameter, metric columns with `_is`/`_oos` suffixes for in-sample and out-of-sample (`sharpe_is`, `sharpe_oos`), and a sample count (`n_trades`). See [`convergence`](#convergence-has-your-variant-sweep-converged) below.
 
 ---
 

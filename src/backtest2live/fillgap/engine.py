@@ -60,7 +60,7 @@ def evaluate(args, log=print):
     if own and not ((args.book or getattr(args, "l2", None)) and args.trades):
         raise SystemExit("error: --book (or --l2) and --trades go together")
 
-    orders = data.load_orders(args.orders, args.max_rest)
+    orders = data.load_orders(args.orders, args.max_rest, log=log)
     n = len(orders["t"])
     latency_us = int(round(args.latency_ms * 1000))
     tick = args.tick
