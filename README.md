@@ -57,6 +57,23 @@ pip install 'backtest2live[data]'
 
 Then ask *"are these variants converged?"* or run `/convergence results.csv --metric sharpe_oos`. The skill installs the CLI if it is missing.
 
+**Any MCP client (Claude Desktop, Cursor, others).** `bt2live mcp` serves the checks as MCP tools over stdio: `convergence`, `fill_gap`, `cost_gap`. Each returns the report and its `--json` result. It reads files on your machine and sends nothing to us; the only network calls are the public market-data downloads `fill_gap` and `cost_gap` make when you name a `venue`.
+
+Claude Desktop (`claude_desktop_config.json`) or Cursor (`~/.cursor/mcp.json`, or `.cursor/mcp.json` in a project):
+
+```json
+{
+  "mcpServers": {
+    "backtest2live": {
+      "command": "uvx",
+      "args": ["--from", "backtest2live[data]", "bt2live", "mcp"]
+    }
+  }
+}
+```
+
+With the package already installed, use `"command": "bt2live", "args": ["mcp"]`. Any other client that launches a stdio server works the same way. Pass absolute paths to your files in the tool arguments.
+
 ---
 
 ## `import`: your engine's export, as the order log the checks read
