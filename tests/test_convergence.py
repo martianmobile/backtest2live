@@ -48,6 +48,23 @@ def test_higher_is_better_override(write_csv):
     assert ctx["top"][0]["id"] == "c"
 
 
+def test_return_count_column_is_not_a_metric(write_csv):
+    # `n_returns` contains `ret`; as a stat column it must not be picked as the ranking metric.
+    ctx = run(write_csv("variant_id,lookback,n_returns,sharpe\na,10,365,1.0\nb,20,365,1.4\nc,30,365,0.8"))
+    assert ctx["rank_col"] == "sharpe"
+
+
+def test_stat_column_is_neither_a_parameter_nor_a_metric(write_csv):
+    # n_returns repeats heavily, so by cardinality alone it would read as a swept parameter
+    rows = [f"v{i},{10 * (1 + i % 3)},{1.0 + 0.07 * i:.2f},365,300" for i in range(9)]
+    path = write_csv("variant_id,lookback,sharpe,n_returns,n_trades\n" + "\n".join(rows))
+    assert set(run(path)["params"]) == {"lookback"}
+    p = argparse.ArgumentParser()
+    cv.add_arguments(p)
+    roles = {c: r for c, r, _ in cv.describe(path, p.parse_args([path]))}
+    assert roles["n_returns"] == "return statistic" and roles["sharpe"] == "ranking metric"
+
+
 def test_window_param_is_not_a_metric(write_csv):
     ctx = run(write_csv("run_id,window,max_drawdown,n_trades\nr1,10,0.12,400\nr2,20,0.08,410\nr3,30,0.07,420"))
     assert ctx["rank_col"] == "max_drawdown"
