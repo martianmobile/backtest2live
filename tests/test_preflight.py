@@ -92,8 +92,7 @@ def test_typed_log_runs_both(write_csv, market, capsys):
     rc, d = run(capsys, "--orders", write_csv(log, "o.csv"), *market)
     fg, cg = section(d, "execution")["checks"]
     assert cg["verdict"] in ("CONSISTENT", "OVERSTATED") and cg["result"]["counts"]["taker"] == 1
-    # fill-gap reads a mixed log once it skips market rows (PR #34); until then it says why it did not run
-    assert fg["status"] == "pass" or (fg["status"] == "not run" and "price" in fg["reason"]), fg
+    assert fg["status"] == "pass", fg  # fill-gap skips the market row
 
 
 def test_a_check_that_cannot_run_says_why(write_csv, capsys):
