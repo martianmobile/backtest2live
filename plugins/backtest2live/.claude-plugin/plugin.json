@@ -1,7 +1,7 @@
 {
   "name": "backtest2live",
   "description": "Check a backtest against what live execution would do, run locally. Three checks: convergence across a variant sweep (CONVERGED / ITERATE / KILL), fill-gap for resting orders against a queue proxy, cost-gap for taker orders against the real book. Wraps the backtest2live CLI.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "author": {
     "name": "Martian Mobile",
     "email": "martin@martianmobile.com"
