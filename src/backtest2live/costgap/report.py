@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from backtest2live.costgap import CTA_URL, SCHEMA
+from backtest2live.fillgap.l2 import DEPTH as _DEPTH
 
 
 def _bps(x):
@@ -46,8 +47,9 @@ def markdown(res):
     L += [f"Priced: {c['taker']:,} taker orders (market, or limit crossing the touch). "
           f"{c['resting']:,} limit orders rest behind the touch and are not priced here: that is `bt2live fill-gap`'s job. "
           f"{c['no_data']:,} fall outside the market data.",
-          f"{c['beyond_touch']:,} orders were larger than the displayed size at the touch; "
-          f"{c['partially_unfilled']:,} limit orders could not fill in full within their limit.", ""]
+          f"{c['beyond_touch']:,} orders were larger than the displayed size at the touch"
+          + (f" ({c['past_recorded_depth']:,} past the {_DEPTH} recorded levels)" if res["book_depth"] == "l2" else "")
+          + f"; {c['partially_unfilled']:,} limit orders could not fill in full within their limit.", ""]
     L += ["Cost by arrival latency (mean over the same orders):", "",
           "| Latency | Orders | Mean | Median |", "|---:|---:|---:|---:|"]
     for row in res["latency_sweep"]:
@@ -73,19 +75,31 @@ def markdown(res):
     L += ["---", "", "## Inputs", "",
           f"- Market data: {res['source']}; tick "
           + (f"{res['tick']:g}" if not res.get("tick_change") else f"{res['tick_change']} (the venue changed it)"),
+          f"- Size beyond the touch: " + ("walked through the real L2 levels" if res["book_depth"] == "l2"
+                                           else "flat-depth floor (top-of-book only)"),
           f"- Baseline (what the backtest booked): {res['baseline']}",
           f"- Arrival latency: {res['latency_ms']:g} ms",
           f"- Verdict OVERSTATED when the cost removes more than {_pct(res['tolerance'])} of the backtest's P&L "
           f"(needs a `pnl` column; without one the verdict is REPORTED)",
           "", "---", "", "## What the book can and cannot see", "",
-          "Top-of-book shows the price and displayed size at the touch, and nothing behind it. Size beyond the touch "
-          "is priced one tick worse per displayed-size slice, the least impact consistent with the feed. Real depth "
-          "is usually thinner than that behind the first level and hidden size can be thicker, so this is a floor on "
-          "impact, not a measurement. Latency is the other half: the table above shows how fast the cost grows when "
-          "your order arrives after the book you saw.",
+          _depth_note(res["book_depth"]) + " Latency is the other half: the table above shows how fast the cost "
+          "grows when your order arrives after the book you saw.",
           "",
           f"Your own live fills settle it: the calibrated check against live execution is at {CTA_URL}", ""]
     return "\n".join(L)
+
+
+def _depth_note(mode):
+    if mode == "l2":
+        return (f"Size beyond the touch walks the real L2 levels, the {_DEPTH} best per side as they stood at the last "
+                "top-of-book change before arrival; a level behind the touch can have changed since. Past the deepest "
+                "recorded level the walk falls back to one tick worse per that level's size. Hidden size and other "
+                "orders arriving with yours are not visible, so this is closer to a measurement than the L1 floor, "
+                "but still not your fill.")
+    return ("Top-of-book shows the price and displayed size at the touch, and nothing behind it. Size beyond the touch "
+            "is priced one tick worse per displayed-size slice, the least impact consistent with the feed. Real depth "
+            "is usually thinner than that behind the first level and hidden size can be thicker, so this is a floor on "
+            "impact, not a measurement. With an L2 source (`--venue bybit-*` or `--l2`) the real levels are walked.")
 
 
 def to_json(res):

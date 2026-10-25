@@ -1,3 +1,4 @@
+import datetime
 import json
 
 import pytest
@@ -406,7 +407,20 @@ def test_bybit_venue_offline(tmp_path, monkeypatch, write_csv, capsys):
     assert d["counts"]["proxy_fills"] == 1
     assert d["source"].startswith("Bybit linear")
     # replay cached as .npz next to the archive file
-    assert list((tmp_path / "cache" / "bybit" / "orderbook" / "linear" / "BTCUSDT").glob("*.l1v1.npz"))
+    caches = list((tmp_path / "cache" / "bybit" / "orderbook" / "linear" / "BTCUSDT").glob("*.l1v2.npz"))
+    assert len(caches) == 1 and "bid_lv_off" not in np.load(caches[0]).files  # fill-gap keeps no depth
+
+
+def test_bybit_depth_cache_serves_top_of_book(tmp_path, monkeypatch):
+    from backtest2live.fillgap import data, l2
+    _bybit_archive(tmp_path, monkeypatch, day="2024-03-30")
+    day = [datetime.date(2024, 3, 30)]
+    deep, _ = data.load_bybit("linear", "BTCUSDT", day, offline=True, log=lambda m: None, with_depth=True)
+    assert set(l2.DEPTH_KEYS) <= set(deep)
+    logs = []
+    top, _ = data.load_bybit("linear", "BTCUSDT", day, offline=True, log=logs.append)
+    assert not any("replaying" in m for m in logs)  # read from the depth cache, no second replay
+    assert set(top) == set(l2.L1_KEYS) and (top["bid_px"] == deep["bid_px"]).all()
 
 
 def test_book_and_l2_together_is_an_error(write_csv, market, capsys):

@@ -369,19 +369,30 @@ def _bybit_book_file(category, pair, day, offline, log):
     raise SystemExit(f"error: no Bybit {category} order-book file for {pair} on {day} ({last})")
 
 
-def load_bybit(category, pair, days, offline=False, log=print):
-    """Bybit public L2 archive replayed to top-of-book, plus the public trades CSV, for the UTC days."""
+def _bybit_cache(bf, with_depth):
+    """Top-of-book and depth replays cache separately; an existing depth cache also serves top-of-book."""
+    from backtest2live.fillgap import l2
+    depth_cache = f"{bf}.{l2.CACHE_VERSION}d.npz"
+    if with_depth or os.path.exists(depth_cache):
+        return depth_cache
+    return f"{bf}.{l2.CACHE_VERSION}.npz"
+
+
+def load_bybit(category, pair, days, offline=False, log=print, with_depth=False):
+    """Bybit public L2 archive replayed to top-of-book, plus the public trades CSV, for the UTC days.
+    With with_depth (cost-gap) the book also carries the l2.DEPTH best levels per side at each
+    top-of-book change."""
     from backtest2live.fillgap import l2
     books, trades = [], []
     for d in days:
         bf = _bybit_book_file(category, pair, d, offline, log)
-        books.append(l2.l1_from_file(bf, cache_path=bf + ".l1v1.npz", log=log))
+        books.append(l2.l1_from_file(bf, cache_path=_bybit_cache(bf, with_depth), log=log, with_depth=with_depth))
         tname = f"{pair}{d.isoformat()}.csv.gz"
         tf = _download(f"{BYBIT_TRADES_ROOT}/{pair}/{tname}",
                        os.path.join(cache_dir(), "bybit", "trading", pair, tname), offline, log)
         tr = pd.read_csv(tf, usecols=["timestamp", "side", "size", "price"])
         trades.append(tr)
-    book = _sort({k: np.concatenate([b[k] for b in books]) for k in ("t", "bid_px", "bid_qty", "ask_px", "ask_qty")})
+    book = _sort({k: np.concatenate([b[k] for b in books]) for k in books[0]})
     tr = pd.concat(trades, ignore_index=True)
     trd = _sort({"t": np.rint(tr["timestamp"].to_numpy(np.float64) * 1e6).astype(np.int64),
                  "px": tr["price"].to_numpy(np.float64), "qty": tr["size"].to_numpy(np.float64),
@@ -389,24 +400,25 @@ def load_bybit(category, pair, days, offline=False, log=print):
     return book, trd
 
 
-def load_venue(venue, pair, days, offline=False, log=print):
+def load_venue(venue, pair, days, offline=False, log=print, with_depth=False):
     """Dispatch on --venue. Returns (book, trades) in the normalized arrays."""
     if venue == "binance-um":
         return load_binance_um(pair, days, offline=offline, log=log)
     if venue.startswith("bybit-"):
-        return load_bybit(venue.split("-", 1)[1], pair, days, offline=offline, log=log)
+        return load_bybit(venue.split("-", 1)[1], pair, days, offline=offline, log=log, with_depth=with_depth)
     raise SystemExit(f"error: unknown venue {venue!r}")
 
 
-def load_l2_files(paths, log=print):
-    """User-supplied L2 day files (OKX books, Bybit ob*.data[.zip]) replayed to top-of-book."""
+def load_l2_files(paths, log=print, with_depth=False):
+    """User-supplied L2 day files (OKX books, Bybit ob*.data[.zip]) replayed to top-of-book,
+    with the l2.DEPTH best levels per side when with_depth (cost-gap)."""
     from backtest2live.fillgap import l2
     books = []
     for p in paths:
         if not os.path.exists(p):
             raise SystemExit(f"error: L2 file not found: {p!r}")
-        books.append(l2.l1_from_file(p, cache_path=None, log=log))
-    return _sort({k: np.concatenate([b[k] for b in books]) for k in ("t", "bid_px", "bid_qty", "ask_px", "ask_qty")})
+        books.append(l2.l1_from_file(p, cache_path=None, log=log, with_depth=with_depth))
+    return _sort({k: np.concatenate([b[k] for b in books]) for k in books[0]})
 
 
 def venue_source(venue, pair):
