@@ -1,3 +1,10 @@
+# [0.7.0](https://github.com/martianmobile/backtest2live/compare/v0.6.0...v0.7.0) (2026-10-25)
+
+
+### Features
+
+* bt2live tearsheet — performance sheet with a required provenance label ([#36](https://github.com/martianmobile/backtest2live/issues/36)) ([dc9ae2d](https://github.com/martianmobile/backtest2live/commit/dc9ae2d8b7338c7c4e26579bbe0019ae6a24dc01)), closes [#10](https://github.com/martianmobile/backtest2live/issues/10) [#7](https://github.com/martianmobile/backtest2live/issues/7)
+
 # [0.6.0](https://github.com/martianmobile/backtest2live/compare/v0.5.0...v0.6.0) (2026-10-25)
 
 
