@@ -31,6 +31,7 @@ Each evaluator below checks one of these on your own files: `fill-gap` re-runs y
 | **`bt2live cost-gap`** | shipped | Re-price your backtest's taker orders (market, or limits that cross) on top-of-book at arrival, with latency → what they would have paid vs what the backtest booked: **CONSISTENT / OVERSTATED**. The check for bar-based backtests. |
 | **`bt2live import`** | new | Convert an engine's export (NautilusTrader, LEAN, backtrader, vectorbt, freqtrade, Hummingbot) into the order log the checks read. |
 | **`bt2live tearsheet`** | new | One shareable performance sheet (Markdown, HTML, JSON) whose header says where the numbers came from: **backtest** or **self-reported live**. |
+| **`bt2live preflight`** | new | Every check above in one report: out-of-sample, execution realism, capacity, risk, each **pass / warn / fail / not run**. |
 
 Roadmap: [ROADMAP.md](ROADMAP.md) and the [milestones](https://github.com/martianmobile/backtest2live/milestones).
 
@@ -214,6 +215,16 @@ bt2live tearsheet my_bybit_history.csv --provenance self-reported --venue Bybit 
 A third level, a live pilot recorded by Martian Mobile on its own infrastructure, is generated there with a verification link; this tool never writes it.
 
 Input is an equity curve (`ts`, `equity`) or an order log with a `pnl` column plus `--capital` (equity is then capital plus realized P&L; open positions are not marked). The sheet has total return, CAGR, annualized volatility and Sharpe (from daily closes, shown from 30 days of returns), max drawdown and the longest time under water, MAR, the worst day / 7 / 30 days, and monthly returns; from an order log also profit factor, turnover, fees (with a `fee` column) and time in market. `--assumption` lists the fill model and costs, and `--check` cites a `bt2live … --json` result (fill-gap, cost-gap, convergence) with its verdict. `--out sheet` writes `sheet.html` (print it to PDF from the browser) and `sheet.json`; the footer carries the SHA-256 of the JSON without its hash field, so a reader can check the numbers were not edited. Nothing leaves your machine.
+
+---
+
+## `preflight`: every check in one report
+
+```bash
+bt2live preflight --results sweep.csv --orders orders.csv --venue bybit-linear --pair BTCUSDT --out preflight
+```
+
+Runs `convergence` on `--results` and `fill-gap` + `cost-gap` on `--orders` (same market-data flags), then writes one report in four sections, the shape of a live desk's review gate: **out-of-sample**, **execution realism**, **capacity**, **risk**. Each is marked pass / warn / fail / not run, says why a check did not run, and states what a local check on public data cannot see. Capacity and risk have no check yet and always read *not run*. A log without a `type` column holds one kind of order, so only one of fill-gap (it has a fill flag or end time) and cost-gap runs on it; add `type` (market/limit) to run both. `--out preflight` writes `preflight.md` and `preflight.json`. Exit code: `0` every check that ran passed, `1` a warning (ITERATE, or cost-gap without P&L), `2` a failure, `3` error or no check ran.
 
 ---
 
