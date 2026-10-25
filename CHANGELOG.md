@@ -1,3 +1,11 @@
+# [0.10.0](https://github.com/martianmobile/backtest2live/compare/v0.9.0...v0.10.0) (2026-10-25)
+
+
+### Features
+
+* **convergence:** cardinality-first column inference and --describe ([#41](https://github.com/martianmobile/backtest2live/issues/41)) ([1577c21](https://github.com/martianmobile/backtest2live/commit/1577c211c04d2d2aaae952f2f234af09697bd058)), closes [#1](https://github.com/martianmobile/backtest2live/issues/1) [#40](https://github.com/martianmobile/backtest2live/issues/40) [#1](https://github.com/martianmobile/backtest2live/issues/1)
+* **cost-gap:** price beyond the touch from real L2 depth when the source is L2 ([#35](https://github.com/martianmobile/backtest2live/issues/35)) ([6934205](https://github.com/martianmobile/backtest2live/commit/6934205fb01d2bfde25fcca0cccfe56be632d1f2)), closes [#28](https://github.com/martianmobile/backtest2live/issues/28) [#28](https://github.com/martianmobile/backtest2live/issues/28)
+
 # [0.9.0](https://github.com/martianmobile/backtest2live/compare/v0.8.0...v0.9.0) (2026-10-25)
 
 
