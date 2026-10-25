@@ -8,7 +8,7 @@ run never reads as a verdict in CI.
 import argparse
 import sys
 
-from backtest2live import __version__, convergence, costgap, fillgap, importers, tearsheet
+from backtest2live import __version__, convergence, costgap, fillgap, importers, mcp, tearsheet
 
 EXIT_ERROR = 3
 
@@ -65,6 +65,15 @@ def build_parser():
     )
     importers.add_arguments(i)
     i.set_defaults(run=importers.run)
+
+    m = sub.add_parser(
+        "mcp",
+        help="Serve the checks to an AI assistant over MCP (stdio)",
+        description="Model Context Protocol server on stdin/stdout: tools convergence, fill_gap, cost_gap. "
+                    "Start it from an MCP client's config; it runs until stdin closes.",
+    )
+    mcp.add_arguments(m)
+    m.set_defaults(run=mcp.run)
 
     t = sub.add_parser(
         "tearsheet",
