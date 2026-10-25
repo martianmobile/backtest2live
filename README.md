@@ -236,6 +236,7 @@ Given one row per variant (parameters + metrics), it measures:
 - **IS↔OOS rank stability** — does the in-sample ordering survive out-of-sample? (Spearman)
 - **Parameter-space structure** — do winners sit on a plateau, or are they isolated points (overfit)? Is the best variant pinned to the edge of the swept range?
 - **Sample sufficiency** — are any top variants below a trade-count floor?
+- **Selection bias** — when the metric is a Sharpe and the return count is known: the **deflated Sharpe** (Bailey & López de Prado), the probability the winner beats the best Sharpe that the same number of skill-less trials would show. With fold columns (`sharpe_is_1`, `sharpe_oos_1`, `sharpe_is_2`, …) also the **probability of backtest overfitting**: how often each fold's in-sample winner lands at or below the out-of-sample median. A miss turns CONVERGED into ITERATE, never KILL: at 0.95 the deflated Sharpe is strict on short samples. Correlated variants are fewer independent trials than rows; pass `--trials` with an effective count.
 
 …then returns a verdict:
 
@@ -281,6 +282,10 @@ Column roles are inferred from names/types. IS/OOS pairs are detected by suffix 
 | `--rank-threshold` | 0.6 | Min IS/OOS Spearman for CONVERGED |
 | `--lower-is-better` / `--higher-is-better` | auto | Metric direction override |
 | `--id-column` / `--sample-column` | auto | Column-role overrides |
+| `--n-obs` | column | Returns behind each Sharpe, for the deflated Sharpe (else a `n_obs` / `n_days` / `n_periods` column) |
+| `--trials` | variants | Effective number of independent trials for the deflated Sharpe |
+| `--periods-per-year` | 365 | How the Sharpe is annualized (252 for equities, 1 if per period) |
+| `--dsr-threshold` / `--pbo-threshold` | 0.95 / 0.5 | Selection-bias bars for CONVERGED |
 | `--save` | off | Also write `iteration_check_<timestamp>.md` in the current directory |
 | `--json` | off | Print the verdict and numbers as JSON instead of Markdown |
 

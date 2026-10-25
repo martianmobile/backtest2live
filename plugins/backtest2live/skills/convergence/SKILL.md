@@ -53,6 +53,7 @@ Me:  [Runs the analyzer, interprets the verdict, returns the report]
 - Parameter columns (lets me check whether winners cluster in parameter space)
 - In-sample / out-of-sample pairs (e.g. `sharpe_is` + `sharpe_oos`) for rank-stability
 - A sample-size column (`n_trades`, etc.) — variants with too few trades get flagged
+- For the selection-bias check: a return-count column (`n_days`, `n_obs`) or `--n-obs`, so the deflated Sharpe can run when the metric is a Sharpe; optional fold columns (`sharpe_is_1`, `sharpe_oos_1`, …) add the probability of backtest overfitting. A miss downgrades CONVERGED to ITERATE; relay the reason, and suggest `--trials` with an effective count when the variants are near copies of each other
 
 ---
 
