@@ -1,3 +1,10 @@
+# [0.8.0](https://github.com/martianmobile/backtest2live/compare/v0.7.0...v0.8.0) (2026-10-25)
+
+
+### Features
+
+* bt2live preflight — every check in one report, pass / warn / fail / not run ([#38](https://github.com/martianmobile/backtest2live/issues/38)) ([ea71e8e](https://github.com/martianmobile/backtest2live/commit/ea71e8e2bcbd41cabe4e0c403bc7eb032cf2a2a7)), closes [#9](https://github.com/martianmobile/backtest2live/issues/9) [#34](https://github.com/martianmobile/backtest2live/issues/34) [#34](https://github.com/martianmobile/backtest2live/issues/34)
+
 # [0.7.0](https://github.com/martianmobile/backtest2live/compare/v0.6.0...v0.7.0) (2026-10-25)
 
 
