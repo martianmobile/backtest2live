@@ -25,6 +25,7 @@ ORDER_ALIASES = {
     "t_end": ("end_ts", "cancel_ts", "expire_ts", "cancel_time", "end_time", "expiry"),
     "pnl": ("pnl", "pnl_usd", "realized_pnl", "profit"),
     "id": ("order_id", "id", "client_order_id"),
+    "type": ("type", "order_type", "ord_type"),
 }
 BOOK_ALIASES = {
     "t": ("ts", "timestamp", "time", "transaction_time", "event_time", "t"),
@@ -115,9 +116,17 @@ def _numeric(df, col, what):
     return v.to_numpy(np.float64)
 
 
-def load_orders(path, max_rest_s):
+def load_orders(path, max_rest_s, log=print):
     df = _read_csv(path, "order log")
     c = _resolve(df, ORDER_ALIASES, ("t", "side", "px", "size"), "order log")
+    if "type" in c:
+        # a mixed log (the import schema): market orders are cost-gap's, not fill-gap's
+        market = df[c["type"]].astype(str).str.strip().str.lower().isin(("market", "mkt", "m"))
+        if market.all():
+            raise SystemExit("error: every order in the log is a market order; nothing rests, so run cost-gap")
+        if market.any():
+            log(f"fill-gap: skipping {int(market.sum()):,} market orders (cost-gap prices them)")
+            df = df[~market].reset_index(drop=True)
 
     side = df[c["side"]].astype(str).str.strip().str.lower()
     unknown = ~side.isin(BUY_WORDS | SELL_WORDS)

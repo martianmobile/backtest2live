@@ -8,7 +8,7 @@ run never reads as a verdict in CI.
 import argparse
 import sys
 
-from backtest2live import __version__, convergence, costgap, fillgap, preflight
+from backtest2live import __version__, convergence, costgap, fillgap, importers, preflight
 
 EXIT_ERROR = 3
 
@@ -55,6 +55,16 @@ def build_parser():
     )
     costgap.add_arguments(g)
     g.set_defaults(run=costgap.run)
+
+    i = sub.add_parser(
+        "import",
+        help="Convert an engine's export (Nautilus, LEAN, backtrader, vectorbt, freqtrade, Hummingbot) "
+             "into the order-log schema",
+        description="Write a backtest engine's native order or trade export as the order log fill-gap and "
+                    "cost-gap read. Exit code: 0 written, 3 error.",
+    )
+    importers.add_arguments(i)
+    i.set_defaults(run=importers.run)
 
     pf = sub.add_parser(
         "preflight",
