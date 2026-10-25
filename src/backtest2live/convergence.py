@@ -156,9 +156,11 @@ def column_role(col, rows, getf):
     share = len(distinct) / len(vals)
     grid = _is_grid(distinct)
     if named:
-        if share <= NAMED_PARAM_MAX_SHARE or grid:
+        # The grid only overrides the name for a 1-D sweep (every value distinct); a rounded metric repeats.
+        one_d_grid = grid and share == 1.0
+        if share <= NAMED_PARAM_MAX_SHARE or one_d_grid:
             return "parameter", f"metric-like name, but {len(distinct)} values over {len(vals)} rows" + \
-                (" on an even grid" if grid else "")
+                (" on an even grid" if one_d_grid else "")
         return "metric", "metric name"
     if share <= PARAM_MAX_DISTINCT_SHARE:
         return "parameter", f"{len(distinct)} distinct values over {len(vals)} rows"

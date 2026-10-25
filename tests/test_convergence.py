@@ -173,6 +173,12 @@ def test_one_dimensional_grid_is_a_parameter(write_csv):
     assert set(ctx["params"]) == {"lookback"}
 
 
+def test_rounded_metric_on_a_grid_stays_a_metric():
+    # win_rate rounded to 2 dp: 10 values on a 0.01 step, repeated over 24 rows, is a metric, not a sweep
+    rows = [{"win_rate": f"{0.48 + 0.01 * (i % 10):.2f}"} for i in range(24)]
+    assert cv.column_role("win_rate", rows, lambda r, c: float(r[c]))[0] == "metric"
+
+
 def test_metric_word_inside_a_param_name_does_not_make_it_a_metric():
     assert not cv.metric_name("window") and not cv.metric_name("threshold") and not cv.metric_name("lookback")
     assert cv.metric_name("win_rate") and cv.metric_name("t_stat") and cv.metric_name("avg_trade_bps")
