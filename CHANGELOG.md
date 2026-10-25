@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/martianmobile/backtest2live/compare/v0.4.1...v0.5.0) (2026-10-25)
+
+
+### Features
+
+* bt2live import — one order-log schema and importers for six engines ([#34](https://github.com/martianmobile/backtest2live/issues/34)) ([7a333fd](https://github.com/martianmobile/backtest2live/commit/7a333fdd6eb381b4ab8a40cf0671378922f8cee9)), closes [#7](https://github.com/martianmobile/backtest2live/issues/7) [#7](https://github.com/martianmobile/backtest2live/issues/7) [#37](https://github.com/martianmobile/backtest2live/issues/37)
+
 ## [0.4.1](https://github.com/martianmobile/backtest2live/compare/v0.4.0...v0.4.1) (2026-10-18)
 
 
