@@ -269,7 +269,13 @@ v002, 25, 0.5, 1.85, 1.58, 401
 ...
 ```
 
-Column roles are inferred from names/types. IS/OOS pairs are detected by suffix (`_is`/`_oos`, `_in`/`_out`, `_train`/`_test`). For Parquet/SQLite, export to CSV first.
+Pass every metric your engine exports: [`examples/results_multimetric.csv`](examples/results_multimetric.csv) has 3 parameters and 11 metrics (`sharpe_is`/`sharpe_oos`, `sortino_oos`, `calmar_oos`, `max_drawdown`, `volatility`, `win_rate`, `profit_factor`, `avg_trade_bps`, `turnover`, `t_stat`) plus `n_trades`. Parameters and metrics are told apart by **cardinality** first: a swept parameter repeats a few grid values (or, in a 1-D sweep, sits on an even step), a metric is near-unique per variant. The column name only breaks ties, matched as whole words, so `window` is a parameter even though it contains `win`. `--describe` prints each column's role and the reason, without running the analysis:
+
+```bash
+bt2live convergence examples/results_multimetric.csv --describe
+```
+
+IS/OOS pairs are detected by suffix (`_is`/`_oos`, `_in`/`_out`, `_train`/`_test`). For Parquet/SQLite, export to CSV first.
 
 ### Flags
 
@@ -282,6 +288,7 @@ Column roles are inferred from names/types. IS/OOS pairs are detected by suffix 
 | `--rank-threshold` | 0.6 | Min IS/OOS Spearman for CONVERGED |
 | `--lower-is-better` / `--higher-is-better` | auto | Metric direction override |
 | `--id-column` / `--sample-column` | auto | Column-role overrides |
+| `--describe` | off | Print each column's inferred role and exit (no verdict) |
 | `--n-obs` | column | Returns behind each Sharpe, for the deflated Sharpe (else a `n_obs` / `n_days` / `n_periods` column) |
 | `--trials` | variants | Effective number of independent trials for the deflated Sharpe |
 | `--periods-per-year` | 365 | How the Sharpe is annualized (252 for equities, 1 if per period) |

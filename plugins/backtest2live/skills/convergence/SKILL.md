@@ -69,11 +69,12 @@ v003, 25, 0.5, 1.85, 1.58, 401
 ...
 ```
 
-The analyzer infers what's a metric and what's a parameter from column names and types. IS/OOS pairs are detected by suffix (`_is`/`_oos`, `_in`/`_out`, `_train`/`_test`). Override any inference with `--metric`, `--id-column`, `--sample-column`.
+Real exports carry many metrics (sortino, calmar, max_drawdown, win_rate, profit_factor, avg_trade_bps, turnover, t_stat, …); pass them all. The analyzer tells parameters from metrics by cardinality first: a swept parameter repeats a few grid values (or, in a 1-D sweep, sits on an even step), a metric is near-unique per variant. The column name only breaks ties. IS/OOS pairs are detected by suffix (`_is`/`_oos`, `_in`/`_out`, `_train`/`_test`). Before a run on an unfamiliar export, check the inference with `--describe` (prints each column's role and why, no verdict), and override with `--metric`, `--id-column`, `--sample-column`.
 
 Runnable samples ship beside this skill:
 - `${CLAUDE_PLUGIN_ROOT}/skills/convergence/examples/results_converged.csv` → CONVERGED
 - `${CLAUDE_PLUGIN_ROOT}/skills/convergence/examples/results_iterate.csv` → ITERATE
+- `${CLAUDE_PLUGIN_ROOT}/skills/convergence/examples/results_multimetric.csv` → ITERATE (16 columns: 3 parameters, 11 metrics; the winner sits on the edge of the `stop_loss` grid)
 
 ---
 

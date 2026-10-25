@@ -27,11 +27,19 @@ from datetime import datetime
 # --- column-role heuristics ------------------------------------------------
 
 ID_KEYWORDS = ("variant", "run", "config", "params", "param", "id", "name", "trial")
-METRIC_KEYWORDS = (
-    "sharpe", "sortino", "calmar", "pnl", "profit", "return", "ret", "win",
-    "hit", "drawdown", "dd", "mdd", "loss", "score", "metric", "alpha", "ir",
-    "pf", "expectancy", "cagr",
+# Metric names: long words match anywhere in the name; short ones only as a whole _-separated token,
+# so `window` is not `win` and `threshold` is not `ret`. A tiebreaker: cardinality decides first.
+METRIC_WORDS = (
+    "sharpe", "sortino", "calmar", "profit", "return", "drawdown", "expectancy", "turnover", "volatility",
+    "slippage", "commission", "exposure", "payoff", "omega", "winrate", "hitrate",
 )
+METRIC_TOKENS = frozenset((
+    "pnl", "ret", "rets", "win", "hit", "dd", "mdd", "loss", "score", "metric", "alpha", "ir", "pf", "cagr",
+    "bps", "tstat", "pval", "pvalue", "vol", "var", "cvar", "fee", "fees", "sqn", "edge", "mar",
+))
+PARAM_MAX_DISTINCT_SHARE = 0.5  # a swept grid repeats its values; at most this share of rows is distinct
+NAMED_PARAM_MAX_SHARE = 0.2     # a metric-named column must repeat this much to count as a parameter
+CARDINALITY_MIN_ROWS = 4        # below this, cardinality says nothing and the name decides
 SAMPLE_KEYWORDS = (
     "n_trades", "num_trades", "trades", "n_samples", "samples", "n_obs",
     "nobs", "count", "n",
@@ -120,6 +128,54 @@ def _strip_suffix(name):
     return name, ""
 
 
+def metric_name(col):
+    """True when the column is named like a performance metric (see METRIC_WORDS / METRIC_TOKENS)."""
+    low = col.lower()
+    tokens = set(re.split(r"[^a-z0-9]+", low))
+    return (any(w in low for w in METRIC_WORDS) or bool(tokens & METRIC_TOKENS)
+            or low.replace("_", "") in ("tstat", "pvalue"))
+
+
+def _is_grid(vals):
+    """>= 3 distinct values on an even arithmetic or geometric step: how a swept parameter is laid out."""
+    if len(vals) < 3:
+        return False
+    span = vals[-1] - vals[0]
+    d = [b - a for a, b in zip(vals, vals[1:])]
+    if all(abs(x - d[0]) <= 1e-6 * span for x in d):
+        return True
+    if vals[0] > 0:
+        r = [b / a for a, b in zip(vals, vals[1:])]
+        return all(abs(x - r[0]) <= 1e-6 * r[0] for x in r)
+    return False
+
+
+def column_role(col, rows, getf):
+    """(role, reason): 'parameter' or 'metric', by cardinality first and the name as tiebreaker."""
+    if _strip_suffix(col)[1]:
+        return "metric", "in-sample / out-of-sample suffix"
+    vals = [getf(r, col) for r in rows if getf(r, col) is not None]
+    named = metric_name(col)
+    if len(vals) < CARDINALITY_MIN_ROWS:
+        return ("metric", "metric name (too few rows for cardinality)") if named else \
+            ("parameter", "not a metric name (too few rows for cardinality)")
+    distinct = sorted(set(vals))
+    share = len(distinct) / len(vals)
+    grid = _is_grid(distinct)
+    if named:
+        # The grid only overrides the name for a 1-D sweep (every value distinct); a rounded metric repeats.
+        one_d_grid = grid and share == 1.0
+        if share <= NAMED_PARAM_MAX_SHARE or one_d_grid:
+            return "parameter", f"metric-like name, but {len(distinct)} values over {len(vals)} rows" + \
+                (" on an even grid" if one_d_grid else "")
+        return "metric", "metric name"
+    if share <= PARAM_MAX_DISTINCT_SHARE:
+        return "parameter", f"{len(distinct)} distinct values over {len(vals)} rows"
+    if grid:
+        return "parameter", f"{len(distinct)} values on an even grid"
+    return "metric", f"{len(distinct)} distinct, irregular values over {len(vals)} rows"
+
+
 def resolve_metrics(numeric, requested):
     """Return (rank_col, is_col, oos_col, base)."""
     if not numeric:
@@ -137,7 +193,7 @@ def resolve_metrics(numeric, requested):
                 )
             rank_col = oos[0] if oos else cand[0]
     else:
-        metric_like = [c for c in numeric if any(k in c.lower() for k in METRIC_KEYWORDS)]
+        metric_like = [c for c in numeric if metric_name(c)]
         oos = [c for c in metric_like if c.lower().endswith(OOS_SUFFIXES)]
         rank_col = oos[0] if oos else (metric_like[0] if metric_like else None)
         if rank_col is None:
@@ -385,11 +441,9 @@ def analyze(path, args):
     else:
         separation = 0.0
 
-    param_cols = [
-        c for c in numeric
-        if c not in (rank_col, is_col, oos_col, sample_col, id_col) and c not in stat_cols
-        and not any(kw in c.lower() for kw in METRIC_KEYWORDS)
-    ]
+    roles = {c: column_role(c, ranked, getf) for c in numeric
+             if c not in (rank_col, is_col, oos_col, sample_col, id_col) and c not in stat_cols}
+    param_cols = [c for c, (role, _) in roles.items() if role == "parameter"]
     params = parameter_check(top, ranked, param_cols, getf)
     any_isolated = any(not f["contiguous"] for f in params.values())
     any_edge = any(f["edge"] for f in params.values())
@@ -456,9 +510,46 @@ def analyze(path, args):
         params=params, plateau=plateau, any_edge=any_edge, any_isolated=any_isolated,
         samples_ok=samples_ok, low_sample_variants=low_sample_variants,
         verdict=verdict, kill_reasons=kill_reasons, separation=separation,
-        best=best, median_all=median_all, getf=getf, args=args, dsr=dsr, pbo=pbo, adjustments=adjustments,
+        best=best, median_all=median_all, getf=getf, args=args, roles=roles, dsr=dsr, pbo=pbo,
+        adjustments=adjustments,
     )
     return ctx
+
+
+def describe(path, args):
+    """Inferred column roles, without the analysis: what --describe prints."""
+    headers, rows = read_table(path)
+    numeric = numeric_columns(headers, rows)
+    folds = fold_columns(numeric)
+    fold_cols = {c for b in folds.values() for f in b.values() for c in f.values()}
+    numeric = [c for c in numeric if c not in fold_cols]
+    id_col = args.id_column or pick_id_column(headers, numeric)
+    sample_col = args.sample_column or pick_sample_column(numeric)
+    stat_cols = {_named(numeric, n) for n in (OBS_COLUMNS, SKEW_COLUMNS, KURT_COLUMNS)}
+    rank_col, is_col, oos_col, _ = resolve_metrics([c for c in numeric if c not in stat_cols], args.metric)
+
+    def getf(r, col):
+        return _to_float(r.get(col))
+
+    out = []
+    for c in headers:
+        if c == id_col:
+            out.append((c, "id", "variant id column"))
+        elif c == rank_col:
+            out.append((c, "ranking metric", "--metric" if args.metric else "auto-detected"))
+        elif c in (is_col, oos_col):
+            out.append((c, "metric", f"{'in' if c == is_col else 'out-of'}-sample pair of the ranking metric"))
+        elif c == sample_col:
+            out.append((c, "sample size", "--sample-column" if args.sample_column else "sample-count name"))
+        elif c in fold_cols:
+            out.append((c, "metric", "in-sample / out-of-sample fold, for PBO"))
+        elif c in stat_cols:
+            out.append((c, "return statistic", "for the deflated Sharpe"))
+        elif c not in numeric:
+            out.append((c, "ignored", "not numeric"))
+        else:
+            out.append((c, *column_role(c, rows, getf)))
+    return out
 
 
 def build_report(ctx):
@@ -664,6 +755,8 @@ def add_arguments(p):
     p.add_argument("--save", action="store_true",
                    help="Also write iteration_check_<timestamp>.md in the current directory")
     p.add_argument("--json", action="store_true", help="Print a machine-readable verdict instead of Markdown")
+    p.add_argument("--describe", action="store_true",
+                   help="Print each column's inferred role (parameter, metric, ...) and exit without a verdict")
 
 
 def to_json(ctx):
@@ -707,6 +800,16 @@ def to_json(ctx):
 
 def run(args):
     """CLI entry for `bt2live convergence`. Returns the verdict exit code."""
+    if args.describe:
+        roles = describe(args.input, args)
+        if args.json:
+            print(json.dumps({"schema": "backtest2live.convergence-columns/1", "input": args.input,
+                              "columns": [{"column": c, "role": r, "reason": why} for c, r, why in roles]}, indent=2))
+        else:
+            w = max(len(c) for c, _, _ in roles)
+            for c, r, why in roles:
+                print(f"{c:<{w}}  {r:<14}  {why}")
+        return 0
     ctx = analyze(args.input, args)
     report = build_report(ctx)
     if args.json:

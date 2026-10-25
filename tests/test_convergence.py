@@ -54,7 +54,17 @@ def test_return_count_column_is_not_a_metric(write_csv):
     assert ctx["rank_col"] == "sharpe"
 
 
-@pytest.mark.xfail(strict=True, reason="keyword inference: 'window' matches 'win' — fixed by cardinality inference (#1)")
+def test_stat_column_is_neither_a_parameter_nor_a_metric(write_csv):
+    # n_returns repeats heavily, so by cardinality alone it would read as a swept parameter
+    rows = [f"v{i},{10 * (1 + i % 3)},{1.0 + 0.07 * i:.2f},365,300" for i in range(9)]
+    path = write_csv("variant_id,lookback,sharpe,n_returns,n_trades\n" + "\n".join(rows))
+    assert set(run(path)["params"]) == {"lookback"}
+    p = argparse.ArgumentParser()
+    cv.add_arguments(p)
+    roles = {c: r for c, r, _ in cv.describe(path, p.parse_args([path]))}
+    assert roles["n_returns"] == "return statistic" and roles["sharpe"] == "ranking metric"
+
+
 def test_window_param_is_not_a_metric(write_csv):
     ctx = run(write_csv("run_id,window,max_drawdown,n_trades\nr1,10,0.12,400\nr2,20,0.08,410\nr3,30,0.07,420"))
     assert ctx["rank_col"] == "max_drawdown"
@@ -156,3 +166,48 @@ def test_garbage_cells_drop_the_column(write_csv):
     ctx = run(write_csv("id,lookback,sharpe,notes\na,1,1.0,x\nb,2,2.0,1\nc,3,0.5,y"))
     assert ctx["rank_col"] == "sharpe"
     assert "notes" not in ctx["params"]
+
+
+# --- column roles: cardinality first, the name as tiebreaker (#1) ---------------------
+
+def test_multimetric_export_classifies_only_swept_params(root):
+    ctx = run(str(root / "examples/results_multimetric.csv"), metric="sharpe_oos")
+    assert set(ctx["params"]) == {"lookback", "threshold", "stop_loss"}
+
+
+def test_unnamed_near_unique_column_is_a_metric(write_csv):
+    rows = [f"v{i},{10 * (1 + i % 3)},{1.0 + 0.07 * i:.2f},{1.2 + 0.05 * i:.2f},{0.31 + 0.017 * i * i % 0.4:.3f},300"
+            for i in range(9)]
+    ctx = run(write_csv("variant_id,lookback,sharpe_is,sharpe_oos,zeta,n_trades\n" + "\n".join(rows)))
+    assert ctx["roles"]["zeta"][0] == "metric"  # no metric word: near-unique, irregular values decide
+    assert set(ctx["params"]) == {"lookback"}
+
+
+def test_one_dimensional_grid_is_a_parameter(write_csv):
+    # every value unique, but on an even step: a 1-D sweep, not a metric
+    ctx = run(write_csv("id,lookback,sharpe\n" + "\n".join(f"r{i},{5 * (i + 1)},{1 + 0.13 * i % 0.5:.3f}"
+                                                           for i in range(6))), metric="sharpe")
+    assert set(ctx["params"]) == {"lookback"}
+
+
+def test_rounded_metric_on_a_grid_stays_a_metric():
+    # win_rate rounded to 2 dp: 10 values on a 0.01 step, repeated over 24 rows, is a metric, not a sweep
+    rows = [{"win_rate": f"{0.48 + 0.01 * (i % 10):.2f}"} for i in range(24)]
+    assert cv.column_role("win_rate", rows, lambda r, c: float(r[c]))[0] == "metric"
+
+
+def test_metric_word_inside_a_param_name_does_not_make_it_a_metric():
+    assert not cv.metric_name("window") and not cv.metric_name("threshold") and not cv.metric_name("lookback")
+    assert cv.metric_name("win_rate") and cv.metric_name("t_stat") and cv.metric_name("avg_trade_bps")
+    assert cv.metric_name("max_drawdown") and cv.metric_name("turnover")
+
+
+def test_describe_prints_roles_without_a_verdict(root, capsys):
+    from backtest2live import cli
+    rc = cli.main(["convergence", str(root / "examples/results_multimetric.csv"), "--describe", "--json"])
+    import json
+    doc = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    roles = {c["column"]: c["role"] for c in doc["columns"]}
+    assert roles["lookback"] == "parameter" and roles["turnover"] == "metric" and roles["t_stat"] == "metric"
+    assert roles["sharpe_oos"] == "ranking metric" and roles["n_trades"] == "sample size"
