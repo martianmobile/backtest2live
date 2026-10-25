@@ -1,0 +1,9 @@
+[
+ {"id":"algo-1-1","orderId":1,"orderEventId":1,"symbol":"BTCUSDT 2XR","symbolValue":"BTCUSDT","time":1711756860.0,"status":"submitted","fillPrice":0,"fillQuantity":0,"direction":"buy","quantity":0.01,"limitPrice":69924.7},
+ {"id":"algo-1-2","orderId":1,"orderEventId":2,"symbol":"BTCUSDT 2XR","symbolValue":"BTCUSDT","time":1711756871.2,"status":"filled","fillPrice":69924.7,"fillQuantity":0.01,"direction":"buy","quantity":0.01,"limitPrice":69924.7},
+ {"id":"algo-2-1","orderId":2,"orderEventId":1,"symbol":"BTCUSDT 2XR","symbolValue":"BTCUSDT","time":1711756860.0,"status":"submitted","fillPrice":0,"fillQuantity":0,"direction":"sell","quantity":-0.01,"limitPrice":69924.8},
+ {"id":"algo-2-2","orderId":2,"orderEventId":2,"symbol":"BTCUSDT 2XR","symbolValue":"BTCUSDT","time":1711756890.0,"status":"canceled","fillPrice":0,"fillQuantity":0,"direction":"sell","quantity":-0.01,"limitPrice":69924.8},
+ {"id":"algo-3-1","orderId":3,"orderEventId":1,"symbol":"BTCUSDT 2XR","symbolValue":"BTCUSDT","time":1711756900.0,"status":"submitted","fillPrice":0,"fillQuantity":0,"direction":"sell","quantity":-0.02},
+ {"id":"algo-3-2","orderId":3,"orderEventId":2,"symbol":"BTCUSDT 2XR","symbolValue":"BTCUSDT","time":1711756900.0,"status":"partiallyFilled","fillPrice":69925.2,"fillQuantity":-0.01,"direction":"sell","quantity":-0.02},
+ {"id":"algo-3-3","orderId":3,"orderEventId":3,"symbol":"BTCUSDT 2XR","symbolValue":"BTCUSDT","time":1711756900.0,"status":"filled","fillPrice":69925.0,"fillQuantity":-0.01,"direction":"sell","quantity":-0.02}
+]
