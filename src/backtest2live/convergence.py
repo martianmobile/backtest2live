@@ -348,7 +348,8 @@ def analyze(path, args):
     numeric = [c for c in numeric if c not in fold_cols]
     id_col = args.id_column or pick_id_column(headers, numeric)
     sample_col = args.sample_column or pick_sample_column(numeric)
-    rank_col, is_col, oos_col, base = resolve_metrics(numeric, args.metric)
+    stat_cols = {_named(numeric, n) for n in (OBS_COLUMNS, SKEW_COLUMNS, KURT_COLUMNS)}
+    rank_col, is_col, oos_col, base = resolve_metrics([c for c in numeric if c not in stat_cols], args.metric)
 
     lower_better = (
         args.lower_is_better
@@ -384,7 +385,6 @@ def analyze(path, args):
     else:
         separation = 0.0
 
-    stat_cols = {_named(numeric, n) for n in (OBS_COLUMNS, SKEW_COLUMNS, KURT_COLUMNS)}
     param_cols = [
         c for c in numeric
         if c not in (rank_col, is_col, oos_col, sample_col, id_col) and c not in stat_cols

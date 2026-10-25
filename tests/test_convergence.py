@@ -48,6 +48,12 @@ def test_higher_is_better_override(write_csv):
     assert ctx["top"][0]["id"] == "c"
 
 
+def test_return_count_column_is_not_a_metric(write_csv):
+    # `n_returns` contains `ret`; as a stat column it must not be picked as the ranking metric.
+    ctx = run(write_csv("variant_id,lookback,n_returns,sharpe\na,10,365,1.0\nb,20,365,1.4\nc,30,365,0.8"))
+    assert ctx["rank_col"] == "sharpe"
+
+
 @pytest.mark.xfail(strict=True, reason="keyword inference: 'window' matches 'win' — fixed by cardinality inference (#1)")
 def test_window_param_is_not_a_metric(write_csv):
     ctx = run(write_csv("run_id,window,max_drawdown,n_trades\nr1,10,0.12,400\nr2,20,0.08,410\nr3,30,0.07,420"))
