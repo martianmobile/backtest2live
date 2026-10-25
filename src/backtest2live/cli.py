@@ -8,7 +8,7 @@ run never reads as a verdict in CI.
 import argparse
 import sys
 
-from backtest2live import __version__, convergence, costgap, fillgap, importers, mcp, preflight
+from backtest2live import __version__, convergence, costgap, fillgap, importers, mcp, preflight, tearsheet
 
 EXIT_ERROR = 3
 
@@ -74,6 +74,15 @@ def build_parser():
     )
     mcp.add_arguments(m)
     m.set_defaults(run=mcp.run)
+
+    t = sub.add_parser(
+        "tearsheet",
+        help="One shareable performance sheet, labelled backtest or self-reported live",
+        description="Performance sheet from an equity curve or an order log with P&L, with its provenance in "
+                    "the header. Markdown on stdout; --out writes HTML and JSON. Exit code: 0 written, 3 error.",
+    )
+    tearsheet.add_arguments(t)
+    t.set_defaults(run=tearsheet.run)
 
     pf = sub.add_parser(
         "preflight",

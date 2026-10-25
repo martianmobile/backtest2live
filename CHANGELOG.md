@@ -1,3 +1,10 @@
+# [0.6.0](https://github.com/martianmobile/backtest2live/compare/v0.5.0...v0.6.0) (2026-10-25)
+
+
+### Features
+
+* bt2live mcp — the checks as MCP tools for any AI assistant (stdio) ([#39](https://github.com/martianmobile/backtest2live/issues/39)) ([9130051](https://github.com/martianmobile/backtest2live/commit/913005185eb7dfb4a6b96cefcab22c4bdd11a255)), closes [#8](https://github.com/martianmobile/backtest2live/issues/8)
+
 # [0.5.0](https://github.com/martianmobile/backtest2live/compare/v0.4.1...v0.5.0) (2026-10-25)
 
 

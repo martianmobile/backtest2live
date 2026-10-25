@@ -30,6 +30,7 @@ Each evaluator below checks one of these on your own files: `fill-gap` re-runs y
 | **`bt2live fill-gap`** | shipped | Re-run your backtest's resting orders under a queue proxy on top-of-book and trades → your fill rate vs the proxy's: **CONSISTENT / OVERSTATED**. |
 | **`bt2live cost-gap`** | shipped | Re-price your backtest's taker orders (market, or limits that cross) on top-of-book at arrival, with latency → what they would have paid vs what the backtest booked: **CONSISTENT / OVERSTATED**. The check for bar-based backtests. |
 | **`bt2live import`** | new | Convert an engine's export (NautilusTrader, LEAN, backtrader, vectorbt, freqtrade, Hummingbot) into the order log the checks read. |
+| **`bt2live tearsheet`** | new | One shareable performance sheet (Markdown, HTML, JSON) whose header says where the numbers came from: **backtest** or **self-reported live**. |
 | **`bt2live preflight`** | new | Every check above in one report: out-of-sample, execution realism, capacity, risk, each **pass / warn / fail / not run**. |
 
 Roadmap: [ROADMAP.md](ROADMAP.md) and the [milestones](https://github.com/martianmobile/backtest2live/milestones).
@@ -194,6 +195,26 @@ Same columns as `fill-gap`, with three additions: `type` (`market`/`limit`), `pr
 ### What the book can and cannot see
 
 Top-of-book shows the touch and its displayed size, nothing behind it. Size beyond the touch is priced one tick worse per displayed-size slice, the least impact consistent with the feed, so the cost is a floor, not a measurement. Only your own live fills settle it.
+
+---
+
+## `tearsheet`: one sheet, labelled with where its numbers came from
+
+Tear sheets are commodity; what they rarely say is where the numbers came from. Every `bt2live tearsheet` prints its provenance in the header, and the flag is required:
+
+```bash
+bt2live tearsheet equity.csv --provenance backtest --assumption "limit fills at touch" --check fill-gap.json --out sheet
+bt2live tearsheet my_bybit_history.csv --provenance self-reported --venue Bybit --capital 10000
+```
+
+| `--provenance` | Header |
+|---|---|
+| `backtest` | Backtest — simulated fills, assumptions listed below |
+| `self-reported` | Live, self-reported — read from `<venue>` trade history; account and period chosen by the user |
+
+A third level, a live pilot recorded by Martian Mobile on its own infrastructure, is generated there with a verification link; this tool never writes it.
+
+Input is an equity curve (`ts`, `equity`) or an order log with a `pnl` column plus `--capital` (equity is then capital plus realized P&L; open positions are not marked). The sheet has total return, CAGR, annualized volatility and Sharpe (from daily closes, shown from 30 days of returns), max drawdown and the longest time under water, MAR, the worst day / 7 / 30 days, and monthly returns; from an order log also profit factor, turnover, fees (with a `fee` column) and time in market. `--assumption` lists the fill model and costs, and `--check` cites a `bt2live … --json` result (fill-gap, cost-gap, convergence) with its verdict. `--out sheet` writes `sheet.html` (print it to PDF from the browser) and `sheet.json`; the footer carries the SHA-256 of the JSON without its hash field, so a reader can check the numbers were not edited. Nothing leaves your machine.
 
 ---
 
