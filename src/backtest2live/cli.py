@@ -8,7 +8,7 @@ run never reads as a verdict in CI.
 import argparse
 import sys
 
-from backtest2live import __version__, convergence, costgap, fillgap
+from backtest2live import __version__, convergence, costgap, fillgap, importers, mcp, preflight, tearsheet
 
 EXIT_ERROR = 3
 
@@ -55,6 +55,43 @@ def build_parser():
     )
     costgap.add_arguments(g)
     g.set_defaults(run=costgap.run)
+
+    i = sub.add_parser(
+        "import",
+        help="Convert an engine's export (Nautilus, LEAN, backtrader, vectorbt, freqtrade, Hummingbot) "
+             "into the order-log schema",
+        description="Write a backtest engine's native order or trade export as the order log fill-gap and "
+                    "cost-gap read. Exit code: 0 written, 3 error.",
+    )
+    importers.add_arguments(i)
+    i.set_defaults(run=importers.run)
+
+    m = sub.add_parser(
+        "mcp",
+        help="Serve the checks to an AI assistant over MCP (stdio)",
+        description="Model Context Protocol server on stdin/stdout: tools convergence, fill_gap, cost_gap. "
+                    "Start it from an MCP client's config; it runs until stdin closes.",
+    )
+    mcp.add_arguments(m)
+    m.set_defaults(run=mcp.run)
+
+    t = sub.add_parser(
+        "tearsheet",
+        help="One shareable performance sheet, labelled backtest or self-reported live",
+        description="Performance sheet from an equity curve or an order log with P&L, with its provenance in "
+                    "the header. Markdown on stdout; --out writes HTML and JSON. Exit code: 0 written, 3 error.",
+    )
+    tearsheet.add_arguments(t)
+    t.set_defaults(run=tearsheet.run)
+
+    pf = sub.add_parser(
+        "preflight",
+        help="Every available check in one report: out-of-sample, execution realism, capacity, risk",
+        description="Run convergence, fill-gap and cost-gap on what you pass and write one report, each "
+                    "section pass / warn / fail / not run. Exit code: 0 pass, 1 warn, 2 fail, 3 error or no check ran.",
+    )
+    preflight.add_arguments(pf)
+    pf.set_defaults(run=preflight.run)
     return p
 
 

@@ -19,6 +19,7 @@ ITERATE result (which next variants to try) is left to the calling agent.
 import csv
 import json
 import math
+import re
 import statistics
 import sys
 from datetime import datetime
@@ -26,11 +27,19 @@ from datetime import datetime
 # --- column-role heuristics ------------------------------------------------
 
 ID_KEYWORDS = ("variant", "run", "config", "params", "param", "id", "name", "trial")
-METRIC_KEYWORDS = (
-    "sharpe", "sortino", "calmar", "pnl", "profit", "return", "ret", "win",
-    "hit", "drawdown", "dd", "mdd", "loss", "score", "metric", "alpha", "ir",
-    "pf", "expectancy", "cagr",
+# Metric names: long words match anywhere in the name; short ones only as a whole _-separated token,
+# so `window` is not `win` and `threshold` is not `ret`. A tiebreaker: cardinality decides first.
+METRIC_WORDS = (
+    "sharpe", "sortino", "calmar", "profit", "return", "drawdown", "expectancy", "turnover", "volatility",
+    "slippage", "commission", "exposure", "payoff", "omega", "winrate", "hitrate",
 )
+METRIC_TOKENS = frozenset((
+    "pnl", "ret", "rets", "win", "hit", "dd", "mdd", "loss", "score", "metric", "alpha", "ir", "pf", "cagr",
+    "bps", "tstat", "pval", "pvalue", "vol", "var", "cvar", "fee", "fees", "sqn", "edge", "mar",
+))
+PARAM_MAX_DISTINCT_SHARE = 0.5  # a swept grid repeats its values; at most this share of rows is distinct
+NAMED_PARAM_MAX_SHARE = 0.2     # a metric-named column must repeat this much to count as a parameter
+CARDINALITY_MIN_ROWS = 4        # below this, cardinality says nothing and the name decides
 SAMPLE_KEYWORDS = (
     "n_trades", "num_trades", "trades", "n_samples", "samples", "n_obs",
     "nobs", "count", "n",
@@ -39,6 +48,13 @@ LOWER_BETTER_KEYWORDS = ("drawdown", "dd", "mdd", "loss", "vol", "variance", "st
 
 OOS_SUFFIXES = ("_oos", "_out", "_test", "_val", "_holdout", "_oss")
 IS_SUFFIXES = ("_is", "_in", "_train", "_insample", "_ins")
+
+# selection-bias inputs (deflated Sharpe, PBO)
+OBS_COLUMNS = ("n_obs", "nobs", "n_periods", "n_days", "n_returns", "n_bars")
+SKEW_COLUMNS = ("skew", "skewness")
+KURT_COLUMNS = ("kurtosis", "kurt")
+FOLD_RE = re.compile(r"^(?P<base>.+?)_(?P<side>is|oos)_(?:f|fold)?(?P<k>\d+)$", re.IGNORECASE)
+EULER_GAMMA = 0.5772156649015329
 
 
 def _to_float(s):
@@ -112,6 +128,54 @@ def _strip_suffix(name):
     return name, ""
 
 
+def metric_name(col):
+    """True when the column is named like a performance metric (see METRIC_WORDS / METRIC_TOKENS)."""
+    low = col.lower()
+    tokens = set(re.split(r"[^a-z0-9]+", low))
+    return (any(w in low for w in METRIC_WORDS) or bool(tokens & METRIC_TOKENS)
+            or low.replace("_", "") in ("tstat", "pvalue"))
+
+
+def _is_grid(vals):
+    """>= 3 distinct values on an even arithmetic or geometric step: how a swept parameter is laid out."""
+    if len(vals) < 3:
+        return False
+    span = vals[-1] - vals[0]
+    d = [b - a for a, b in zip(vals, vals[1:])]
+    if all(abs(x - d[0]) <= 1e-6 * span for x in d):
+        return True
+    if vals[0] > 0:
+        r = [b / a for a, b in zip(vals, vals[1:])]
+        return all(abs(x - r[0]) <= 1e-6 * r[0] for x in r)
+    return False
+
+
+def column_role(col, rows, getf):
+    """(role, reason): 'parameter' or 'metric', by cardinality first and the name as tiebreaker."""
+    if _strip_suffix(col)[1]:
+        return "metric", "in-sample / out-of-sample suffix"
+    vals = [getf(r, col) for r in rows if getf(r, col) is not None]
+    named = metric_name(col)
+    if len(vals) < CARDINALITY_MIN_ROWS:
+        return ("metric", "metric name (too few rows for cardinality)") if named else \
+            ("parameter", "not a metric name (too few rows for cardinality)")
+    distinct = sorted(set(vals))
+    share = len(distinct) / len(vals)
+    grid = _is_grid(distinct)
+    if named:
+        # The grid only overrides the name for a 1-D sweep (every value distinct); a rounded metric repeats.
+        one_d_grid = grid and share == 1.0
+        if share <= NAMED_PARAM_MAX_SHARE or one_d_grid:
+            return "parameter", f"metric-like name, but {len(distinct)} values over {len(vals)} rows" + \
+                (" on an even grid" if one_d_grid else "")
+        return "metric", "metric name"
+    if share <= PARAM_MAX_DISTINCT_SHARE:
+        return "parameter", f"{len(distinct)} distinct values over {len(vals)} rows"
+    if grid:
+        return "parameter", f"{len(distinct)} values on an even grid"
+    return "metric", f"{len(distinct)} distinct, irregular values over {len(vals)} rows"
+
+
 def resolve_metrics(numeric, requested):
     """Return (rank_col, is_col, oos_col, base)."""
     if not numeric:
@@ -129,7 +193,7 @@ def resolve_metrics(numeric, requested):
                 )
             rank_col = oos[0] if oos else cand[0]
     else:
-        metric_like = [c for c in numeric if any(k in c.lower() for k in METRIC_KEYWORDS)]
+        metric_like = [c for c in numeric if metric_name(c)]
         oos = [c for c in metric_like if c.lower().endswith(OOS_SUFFIXES)]
         rank_col = oos[0] if oos else (metric_like[0] if metric_like else None)
         if rank_col is None:
@@ -232,6 +296,92 @@ def parameter_check(top_rows, all_rows, param_cols, getf):
     return findings
 
 
+def _named(numeric, names):
+    low = {c.lower(): c for c in numeric}
+    return next((low[n] for n in names if n in low), None)
+
+
+def deflated_sharpe(sr, trial_srs, t_obs, n_trials, skew=0.0, kurt=3.0):
+    """Bailey & López de Prado (2014). sr and trial_srs are per-period (not annualized) Sharpe ratios;
+    t_obs is the number of returns behind sr; kurt is non-excess (3 = normal). Returns
+    (dsr, sr0): the probability that the true Sharpe exceeds sr0, the best Sharpe expected from
+    n_trials skill-less trials with the observed cross-trial variance."""
+    nd = statistics.NormalDist()
+    var = statistics.variance(trial_srs)
+    sr0 = math.sqrt(var) * ((1 - EULER_GAMMA) * nd.inv_cdf(1 - 1 / n_trials)
+                            + EULER_GAMMA * nd.inv_cdf(1 - 1 / (n_trials * math.e)))
+    denom = 1 - skew * sr + (kurt - 1) / 4 * sr ** 2
+    if denom <= 0:
+        return None, sr0
+    return nd.cdf((sr - sr0) * math.sqrt(t_obs - 1) / math.sqrt(denom)), sr0
+
+
+def _dsr(ranked, rank_col, numeric, getf, args):
+    """Deflated Sharpe of the top variant, or {'skipped': reason}."""
+    if "sharpe" not in rank_col.lower():
+        return {"skipped": f"the ranking metric `{rank_col}` is not a Sharpe ratio"}
+    top = ranked[0]
+    obs_col = _named(numeric, OBS_COLUMNS)
+    t_obs = args.n_obs if args.n_obs else (getf(top, obs_col) if obs_col else None)
+    if not t_obs:
+        return {"skipped": f"no return count: pass --n-obs or add a column ({', '.join(OBS_COLUMNS)})"}
+    if t_obs < 3:
+        return {"skipped": f"{t_obs:g} returns are too few"}
+    n_trials = args.trials or len(ranked)
+    if n_trials < 2:
+        return {"skipped": "needs at least 2 trials"}
+    scale = math.sqrt(args.periods_per_year)
+    srs = [getf(r, rank_col) / scale for r in ranked]
+    if len(set(srs)) < 2:
+        return {"skipped": "every variant has the same Sharpe; the cross-trial variance is zero"}
+    skew_col, kurt_col = _named(numeric, SKEW_COLUMNS), _named(numeric, KURT_COLUMNS)
+    skew = getf(top, skew_col) if skew_col and getf(top, skew_col) is not None else 0.0
+    kurt = getf(top, kurt_col) if kurt_col and getf(top, kurt_col) is not None else 3.0
+    dsr, sr0 = deflated_sharpe(srs[0], srs, t_obs, n_trials, skew, kurt)
+    if dsr is None:
+        return {"skipped": "the skew and kurtosis given make the Sharpe's standard error undefined"}
+    return {"dsr": dsr, "sharpe": getf(top, rank_col), "sharpe_hurdle": sr0 * scale, "trials": n_trials,
+            "trials_source": "--trials" if args.trials else "number of variants", "n_obs": t_obs,
+            "periods_per_year": args.periods_per_year, "skew": skew, "kurtosis": kurt,
+            "threshold": args.dsr_threshold, "passed": dsr >= args.dsr_threshold}
+
+
+def fold_columns(numeric):
+    """{base: {k: {'is': col, 'oos': col}}} for wide fold columns like sharpe_is_1 / sharpe_oos_1."""
+    out = {}
+    for c in numeric:
+        m = FOLD_RE.match(c)
+        if m:
+            out.setdefault(m["base"].lower(), {}).setdefault(int(m["k"]), {})[m["side"].lower()] = c
+    return out
+
+
+def _pbo(rows, base, folds, getf, lower_better, threshold):
+    """Probability of backtest overfitting over the given IS/OOS folds (Bailey et al. 2015, on the folds the
+    sweep provides rather than every combinatorial split): per fold, the in-sample winner's out-of-sample
+    relative rank w and its logit; PBO is the share of folds where the winner lands at or below the OOS median."""
+    folds = {k: f for k, f in (folds.get(base.lower()) or {}).items() if "is" in f and "oos" in f}
+    if len(folds) < 2:
+        return {"skipped": f"no fold columns for `{base}` (e.g. {base}_is_1, {base}_oos_1, ...; at least 2 folds)"}
+    sign = -1 if lower_better else 1
+    logits = []
+    for k in sorted(folds):
+        f = folds[k]
+        vals = [(getf(r, f["is"]), getf(r, f["oos"])) for r in rows]
+        vals = [(a, b) for a, b in vals if a is not None and b is not None]
+        if len(vals) < 2:
+            continue
+        best = max(vals, key=lambda v: sign * v[0])
+        oos = sorted(sign * b for _, b in vals)
+        rank = (sum(1 for x in oos if x < sign * best[1]) + 1 + sum(1 for x in oos if x <= sign * best[1])) / 2
+        w = rank / (len(oos) + 1)
+        logits.append(math.log(w / (1 - w)))
+    if len(logits) < 2:
+        return {"skipped": "fewer than 2 folds with values"}
+    pbo = sum(1 for x in logits if x <= 0) / len(logits)
+    return {"pbo": pbo, "folds": len(logits), "logits": logits, "threshold": threshold, "passed": pbo < threshold}
+
+
 def fmt_num(x, nd=2):
     if x is None:
         return "n/a"
@@ -249,9 +399,13 @@ def analyze(path, args):
         raise SystemExit("error: --top-k must be at least 1")
     headers, rows = read_table(path)
     numeric = numeric_columns(headers, rows)
+    folds = fold_columns(numeric)
+    fold_cols = {c for b in folds.values() for f in b.values() for c in f.values()}
+    numeric = [c for c in numeric if c not in fold_cols]
     id_col = args.id_column or pick_id_column(headers, numeric)
     sample_col = args.sample_column or pick_sample_column(numeric)
-    rank_col, is_col, oos_col, base = resolve_metrics(numeric, args.metric)
+    stat_cols = {_named(numeric, n) for n in (OBS_COLUMNS, SKEW_COLUMNS, KURT_COLUMNS)}
+    rank_col, is_col, oos_col, base = resolve_metrics([c for c in numeric if c not in stat_cols], args.metric)
 
     lower_better = (
         args.lower_is_better
@@ -287,11 +441,9 @@ def analyze(path, args):
     else:
         separation = 0.0
 
-    param_cols = [
-        c for c in numeric
-        if c not in (rank_col, is_col, oos_col, sample_col, id_col)
-        and not any(kw in c.lower() for kw in METRIC_KEYWORDS)
-    ]
+    roles = {c: column_role(c, ranked, getf) for c in numeric
+             if c not in (rank_col, is_col, oos_col, sample_col, id_col) and c not in stat_cols}
+    param_cols = [c for c, (role, _) in roles.items() if role == "parameter"]
     params = parameter_check(top, ranked, param_cols, getf)
     any_isolated = any(not f["contiguous"] for f in params.values())
     any_edge = any(f["edge"] for f in params.values())
@@ -330,9 +482,23 @@ def analyze(path, args):
         and not any_edge
     )
 
+    # selection bias: a converged winner of many trials can still be the luckiest one. A miss
+    # downgrades CONVERGED to ITERATE, never to KILL: DSR at 0.95 is strict on short samples.
+    dsr = _dsr(ranked, rank_col, numeric, getf, args)
+    pbo = _pbo(ranked, base, folds, getf, lower_better, args.pbo_threshold)
+    adjustments = []
+    if converged and dsr.get("passed") is False:
+        adjustments.append(f"deflated Sharpe {fmt_num(dsr['dsr'])} < {fmt_num(dsr['threshold'])}: after "
+                           f"{dsr['trials']} trials the winner's Sharpe ({fmt_num(dsr['sharpe'])}) is not clear of "
+                           f"the {fmt_num(dsr['sharpe_hurdle'])} expected from luck alone")
+    if converged and pbo.get("passed") is False:
+        adjustments.append(f"probability of backtest overfitting {fmt_pct(pbo['pbo'], 0)} ≥ "
+                           f"{fmt_pct(pbo['threshold'], 0)}: the in-sample winner lands at or below the "
+                           f"out-of-sample median in {fmt_pct(pbo['pbo'], 0)} of {pbo['folds']} folds")
+
     if kill:
         verdict = "KILL"
-    elif converged:
+    elif converged and not adjustments:
         verdict = "CONVERGED"
     else:
         verdict = "ITERATE"
@@ -344,9 +510,46 @@ def analyze(path, args):
         params=params, plateau=plateau, any_edge=any_edge, any_isolated=any_isolated,
         samples_ok=samples_ok, low_sample_variants=low_sample_variants,
         verdict=verdict, kill_reasons=kill_reasons, separation=separation,
-        best=best, median_all=median_all, getf=getf, args=args,
+        best=best, median_all=median_all, getf=getf, args=args, roles=roles, dsr=dsr, pbo=pbo,
+        adjustments=adjustments,
     )
     return ctx
+
+
+def describe(path, args):
+    """Inferred column roles, without the analysis: what --describe prints."""
+    headers, rows = read_table(path)
+    numeric = numeric_columns(headers, rows)
+    folds = fold_columns(numeric)
+    fold_cols = {c for b in folds.values() for f in b.values() for c in f.values()}
+    numeric = [c for c in numeric if c not in fold_cols]
+    id_col = args.id_column or pick_id_column(headers, numeric)
+    sample_col = args.sample_column or pick_sample_column(numeric)
+    stat_cols = {_named(numeric, n) for n in (OBS_COLUMNS, SKEW_COLUMNS, KURT_COLUMNS)}
+    rank_col, is_col, oos_col, _ = resolve_metrics([c for c in numeric if c not in stat_cols], args.metric)
+
+    def getf(r, col):
+        return _to_float(r.get(col))
+
+    out = []
+    for c in headers:
+        if c == id_col:
+            out.append((c, "id", "variant id column"))
+        elif c == rank_col:
+            out.append((c, "ranking metric", "--metric" if args.metric else "auto-detected"))
+        elif c in (is_col, oos_col):
+            out.append((c, "metric", f"{'in' if c == is_col else 'out-of'}-sample pair of the ranking metric"))
+        elif c == sample_col:
+            out.append((c, "sample size", "--sample-column" if args.sample_column else "sample-count name"))
+        elif c in fold_cols:
+            out.append((c, "metric", "in-sample / out-of-sample fold, for PBO"))
+        elif c in stat_cols:
+            out.append((c, "return statistic", "for the deflated Sharpe"))
+        elif c not in numeric:
+            out.append((c, "ignored", "not numeric"))
+        else:
+            out.append((c, *column_role(c, rows, getf)))
+    return out
 
 
 def build_report(ctx):
@@ -419,6 +622,8 @@ def build_report(ctx):
             offenders = ", ".join(f"{vid} ({fmt_num(n,0)})" for vid, n in ctx["low_sample_variants"])
             L.append(f"⚠ Below `--min-samples` ({a.min_samples}) on `{ctx['sample_col']}`: {offenders}")
         L.append("")
+    if "dsr" in ctx["dsr"] or "pbo" in ctx["pbo"]:
+        L.extend(_selection_bias(ctx))
     L.append("---")
     L.append("")
     L.append("## Recommendation")
@@ -428,8 +633,35 @@ def build_report(ctx):
     return "\n".join(L)
 
 
+def _selection_bias(ctx):
+    d, p = ctx["dsr"], ctx["pbo"]
+    L = ["---", "", "## Selection Bias", ""]
+    if "dsr" in d:
+        ok = "✓" if d["passed"] else "✗"
+        L.append(f"**Deflated Sharpe:** {fmt_num(d['dsr'])} (threshold ≥ {fmt_num(d['threshold'])} {ok}) — the "
+                 f"probability the winner's true Sharpe beats the {fmt_num(d['sharpe_hurdle'])} that the best of "
+                 f"{d['trials']} skill-less trials ({d['trials_source']}) would show, over {d['n_obs']:g} returns.")
+        L.append("")
+        L.append("Correlated variants count as fewer independent trials: pass `--trials` with an effective count "
+                 "(e.g. clusters of the sweep) when neighbours move together. The test treats returns as "
+                 "independent; autocorrelated returns make it too generous.")
+    else:
+        L.append(f"Deflated Sharpe: not run ({d['skipped']}).")
+    L.append("")
+    if "pbo" in p:
+        ok = "✓" if p["passed"] else "✗"
+        L.append(f"**Probability of backtest overfitting:** {fmt_pct(p['pbo'], 0)} over {p['folds']} folds "
+                 f"(threshold < {fmt_pct(p['threshold'], 0)} {ok}).")
+    else:
+        L.append(f"PBO: not run ({p['skipped']}).")
+    L.append("")
+    return L
+
+
 def _summary_line(ctx):
     v = ctx["verdict"]
+    if ctx.get("adjustments"):
+        return "Converged on dispersion, stability and plateau, but " + ctx["adjustments"][0] + "."
     if v == "CONVERGED":
         top_id = ctx["top"][0].get(ctx["id_col"])
         # Nested same-quote f-strings are Python 3.12+ only; keep 3.9 parsing.
@@ -482,6 +714,8 @@ def _recommendation(ctx):
                     f"increase trades per variant or lengthen the OOS window")
     if ctx["samples_ok"] is False:
         sugg.append(f"- Rerun low-sample variants with ≥ {ctx['args'].min_samples} trades before trusting their rank")
+    for a in ctx.get("adjustments", []):
+        sugg.append(f"- Selection bias: {a}. Lengthen the sample or test fewer variants before shipping")
     if not sugg:
         sugg.append("- Add samples and re-run; the signal is borderline on at least one criterion")
     out += sugg
@@ -504,11 +738,25 @@ def add_arguments(p):
     p.add_argument("--sample-column", help="Override the sample-size column")
     p.add_argument("--lower-is-better", action="store_true", help="Treat the metric as lower-is-better")
     p.add_argument("--higher-is-better", action="store_true", help="Force higher-is-better (override name heuristic)")
+    sb = p.add_argument_group("selection bias (deflated Sharpe when the metric is a Sharpe; PBO with fold columns)")
+    sb.add_argument("--n-obs", type=float,
+                    help="Returns behind each Sharpe (e.g. days); else read from a column: " + ", ".join(OBS_COLUMNS))
+    sb.add_argument("--trials", type=int,
+                    help="Effective number of independent trials (default: the number of variants)")
+    sb.add_argument("--periods-per-year", type=float, default=365.0,
+                    help="Periods per year the Sharpe is annualized with (default 365; 252 for equities; "
+                         "1 if the Sharpe is per period)")
+    sb.add_argument("--dsr-threshold", type=float, default=0.95,
+                    help="Min deflated Sharpe for CONVERGED (default 0.95)")
+    sb.add_argument("--pbo-threshold", type=float, default=0.5,
+                    help="PBO at or above this blocks CONVERGED (default 0.5)")
     p.add_argument("--run-name", help="Label for the report header")
     p.add_argument("--date", help="Date for the report header (default: today)")
     p.add_argument("--save", action="store_true",
                    help="Also write iteration_check_<timestamp>.md in the current directory")
     p.add_argument("--json", action="store_true", help="Print a machine-readable verdict instead of Markdown")
+    p.add_argument("--describe", action="store_true",
+                   help="Print each column's inferred role (parameter, metric, ...) and exit without a verdict")
 
 
 def to_json(ctx):
@@ -539,6 +787,9 @@ def to_json(ctx):
         "samples_ok": ctx["samples_ok"],
         "low_sample_variants": [{"id": vid, "n": n} for vid, n in ctx["low_sample_variants"]],
         "kill_reasons": ctx["kill_reasons"],
+        "deflated_sharpe": ctx["dsr"],
+        "pbo": ctx["pbo"],
+        "adjustments": ctx["adjustments"],
         "thresholds": {
             "dispersion": ctx["args"].dispersion_threshold,
             "rank": ctx["args"].rank_threshold,
@@ -549,6 +800,16 @@ def to_json(ctx):
 
 def run(args):
     """CLI entry for `bt2live convergence`. Returns the verdict exit code."""
+    if args.describe:
+        roles = describe(args.input, args)
+        if args.json:
+            print(json.dumps({"schema": "backtest2live.convergence-columns/1", "input": args.input,
+                              "columns": [{"column": c, "role": r, "reason": why} for c, r, why in roles]}, indent=2))
+        else:
+            w = max(len(c) for c, _, _ in roles)
+            for c, r, why in roles:
+                print(f"{c:<{w}}  {r:<14}  {why}")
+        return 0
     ctx = analyze(args.input, args)
     report = build_report(ctx)
     if args.json:

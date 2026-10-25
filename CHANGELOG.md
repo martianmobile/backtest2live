@@ -1,3 +1,38 @@
+# [0.9.0](https://github.com/martianmobile/backtest2live/compare/v0.8.0...v0.9.0) (2026-10-25)
+
+
+### Features
+
+* **convergence:** deflated Sharpe and PBO guard against sweep overfitting ([#40](https://github.com/martianmobile/backtest2live/issues/40)) ([dd41a70](https://github.com/martianmobile/backtest2live/commit/dd41a706fbe5a1e403de5c4e32e7d77d217d0296)), closes [#2](https://github.com/martianmobile/backtest2live/issues/2) [#2](https://github.com/martianmobile/backtest2live/issues/2) [#2](https://github.com/martianmobile/backtest2live/issues/2)
+
+# [0.8.0](https://github.com/martianmobile/backtest2live/compare/v0.7.0...v0.8.0) (2026-10-25)
+
+
+### Features
+
+* bt2live preflight — every check in one report, pass / warn / fail / not run ([#38](https://github.com/martianmobile/backtest2live/issues/38)) ([ea71e8e](https://github.com/martianmobile/backtest2live/commit/ea71e8e2bcbd41cabe4e0c403bc7eb032cf2a2a7)), closes [#9](https://github.com/martianmobile/backtest2live/issues/9) [#34](https://github.com/martianmobile/backtest2live/issues/34) [#34](https://github.com/martianmobile/backtest2live/issues/34)
+
+# [0.7.0](https://github.com/martianmobile/backtest2live/compare/v0.6.0...v0.7.0) (2026-10-25)
+
+
+### Features
+
+* bt2live tearsheet — performance sheet with a required provenance label ([#36](https://github.com/martianmobile/backtest2live/issues/36)) ([dc9ae2d](https://github.com/martianmobile/backtest2live/commit/dc9ae2d8b7338c7c4e26579bbe0019ae6a24dc01)), closes [#10](https://github.com/martianmobile/backtest2live/issues/10) [#7](https://github.com/martianmobile/backtest2live/issues/7)
+
+# [0.6.0](https://github.com/martianmobile/backtest2live/compare/v0.5.0...v0.6.0) (2026-10-25)
+
+
+### Features
+
+* bt2live mcp — the checks as MCP tools for any AI assistant (stdio) ([#39](https://github.com/martianmobile/backtest2live/issues/39)) ([9130051](https://github.com/martianmobile/backtest2live/commit/913005185eb7dfb4a6b96cefcab22c4bdd11a255)), closes [#8](https://github.com/martianmobile/backtest2live/issues/8)
+
+# [0.5.0](https://github.com/martianmobile/backtest2live/compare/v0.4.1...v0.5.0) (2026-10-25)
+
+
+### Features
+
+* bt2live import — one order-log schema and importers for six engines ([#34](https://github.com/martianmobile/backtest2live/issues/34)) ([7a333fd](https://github.com/martianmobile/backtest2live/commit/7a333fdd6eb381b4ab8a40cf0671378922f8cee9)), closes [#7](https://github.com/martianmobile/backtest2live/issues/7) [#7](https://github.com/martianmobile/backtest2live/issues/7) [#37](https://github.com/martianmobile/backtest2live/issues/37)
+
 ## [0.4.1](https://github.com/martianmobile/backtest2live/compare/v0.4.0...v0.4.1) (2026-10-18)
 
 

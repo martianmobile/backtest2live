@@ -1,0 +1,4 @@
+id,ft_trade_id,order_id,status,ft_order_side,order_type,price,average,amount,filled,remaining,order_date,order_filled_date,order_update_date
+1,1,dry_run_buy_BTC/USDT:USDT_1711756860.0,closed,buy,limit,69924.7,69924.7,0.01,0.01,0.0,2024-03-30 00:01:00,2024-03-30 00:01:11.234000,2024-03-30 00:01:11.234000
+2,1,dry_run_sell_BTC/USDT:USDT_1711756860.0,canceled,sell,limit,69924.8,,0.01,0.0,0.01,2024-03-30 00:01:00,,2024-03-30 00:01:30
+3,2,dry_run_buy_ETH/USDT:USDT_1711756900.0,closed,buy,market,3510.25,3510.25,1.5,1.5,0.0,2024-03-30 00:01:40,2024-03-30 00:01:40,2024-03-30 00:01:40
