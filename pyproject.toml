@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.9"
-authors = [{ name = "Martian Mobile", email = "martin@martianmobile.com" }]
+authors = [{ name = "Martian Mobile", email = "help@martianmobile.com" }]
 keywords = ["backtest", "quant", "trading", "overfitting", "execution", "fill-rate", "slippage"]
 classifiers = [
   "Development Status :: 3 - Alpha",
