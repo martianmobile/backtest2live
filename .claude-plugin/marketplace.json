@@ -4,7 +4,7 @@
   "description": "Martian Mobile's public Claude Code plugins — quant research and trading-ops tooling, sanitized from internal workflows.",
   "owner": {
     "name": "Martian Mobile",
-    "email": "martin@martianmobile.com"
+    "email": "help@martianmobile.com"
   },
   "plugins": [
     {
