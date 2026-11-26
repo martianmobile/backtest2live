@@ -46,6 +46,19 @@ jobs:
       - run: pip install -e '.[test]' 'numpy==1.23.5' 'pandas==1.5.3'
       - run: pytest -q
 
+  run-extra:
+    # bt2live run with the backtest runner installed (Python 3.12+ only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e '.[test,run]'
+      - run: pytest -q tests/test_run.py
+      - name: The runner is installed, so the test that needs it ran
+        run: python -c "import trading_engine_backtest, trading_engine_interface"
+
   package:
     runs-on: ubuntu-latest
     steps:

@@ -9,6 +9,7 @@ import argparse
 import sys
 
 from backtest2live import __version__, convergence, costgap, fillgap, importers, mcp, preflight, tearsheet
+from backtest2live import run as runner
 
 EXIT_ERROR = 3
 
@@ -92,6 +93,16 @@ def build_parser():
     )
     preflight.add_arguments(pf)
     pf.set_defaults(run=preflight.run)
+
+    r = sub.add_parser(
+        "run",
+        help="Backtest a strategy written against trading-engine-interface, locally",
+        description="Replay public candles through your strategy's decide() and report the result. Fills are "
+                    "the optimistic end of the band. Needs Python 3.12+ and the run extra. "
+                    "Exit code: 0 ran, 3 error.",
+    )
+    runner.add_arguments(r)
+    r.set_defaults(run=runner.run)
     return p
 
 

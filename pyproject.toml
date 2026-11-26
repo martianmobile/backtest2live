@@ -24,6 +24,9 @@ dependencies = []
 
 [project.optional-dependencies]
 data = ["numpy>=1.23", "pandas>=1.5"]
+# bt2live run: the local backtest runner. Python 3.12+ only; on older Pythons the
+# extra installs nothing and the command says what it needs.
+run = ["trading-engine-backtest>=0.2.28,<0.3; python_version >= '3.12'"]
 test = ["pytest>=7"]
 
 [project.scripts]
