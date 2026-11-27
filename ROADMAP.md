@@ -25,7 +25,7 @@ The toolkit checks artifacts a backtest already produces; the order-log schema i
 
 ## Later (directional)
 
-- **`bt2live run`, the fill band** — [#15](https://github.com/martianmobile/backtest2live/issues/15). `run` ships with candle replay, which is the optimistic end. Next: replay trades and the order book so one run reports both ends of the band (front of queue vs the `fill-gap` queue proxy), with order logs `fill-gap` reads directly.
+- **`bt2live run`, the fill band** — [#15](https://github.com/martianmobile/backtest2live/issues/15). `run` ships with a naive candle replay, which is the optimistic end. Next: replay trades and the order book so one run reports both ends of the band (front of queue vs the `fill-gap` queue proxy), with order logs `fill-gap` reads directly.
 - **`robustness`** — outlier-trade drop test, bootstrap CIs on Sharpe, parameter-perturbation sensitivity.
 - **`walk-forward`** — multi-fold rolling/anchored stability of a chosen variant.
 - **`regime`** — performance by vol/trend regime; flags strategies that only work in one.

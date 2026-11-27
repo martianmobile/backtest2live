@@ -47,7 +47,7 @@ jobs:
       - run: pytest -q
 
   run-extra:
-    # bt2live run with the backtest runner installed (Python 3.12+ only)
+    # bt2live run with the strategy contract installed (Python 3.12+ only)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -55,9 +55,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e '.[test,run]'
-      - run: pytest -q tests/test_run.py
-      - name: The runner is installed, so the test that needs it ran
-        run: python -c "import trading_engine_backtest, trading_engine_interface"
+      - name: The contract is installed, so the simulator tests are not skipped
+        run: python -c "import trading_engine_interface"
+      - run: pytest -q tests/test_run.py tests/test_replay.py
 
   package:
     runs-on: ubuntu-latest

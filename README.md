@@ -50,7 +50,7 @@ The core has no runtime dependencies (Python 3.9+). `fill-gap` needs numpy and p
 pip install 'backtest2live[data]'
 ```
 
-`run` needs Python 3.12 or later and the backtest runner:
+`run` needs Python 3.12 or later and the strategy contract:
 
 ```bash
 pip install 'backtest2live[run]'
@@ -139,9 +139,17 @@ That runs the example installed with the contract. For your own strategy, name t
 bt2live run my_strategy --pair BTC-USDT --from 2026-11-01 --to 2026-11-08
 ```
 
-`my_strategy` is found in the current directory (or `--path`). It registers one class with `@register_strategy(config=YourConfig)`; the contract's README shows the smallest complete one. `run` builds the config from the pair and the limits, constructs the strategy once, and calls `decide()` on each candle of the exchange you name with `--venue` (`okx` by default, or `binance`). `--set quantity=0.01` overrides a config field, `--export-orders orders.json` writes the orders, and `--verbose` shows why `decide()` returned no orders.
+`my_strategy` is found in the current directory (or `--path`). It registers one class with `@register_strategy(config=YourConfig)`; the contract's README shows the smallest complete one. `run` builds the config from the pair and the limits, constructs the strategy once, and calls `decide()` at each candle close of the exchange you name with `--venue` (`okx` by default, or `binance`). `--set quantity=0.01` overrides a config field, `--export-orders orders.json` writes every order and what happened to it, and `--verbose` shows why `decide()` returned no orders.
 
-**What the result means.** This release replays candles: an order fills when the next candle allows it, with no queue in front of it. That is the optimistic end of the fill band, so the fill rate and the P&L are upper bounds. Fees default to 10 bps taker and 8 bps maker; set yours with `--taker-fee-bps` and `--maker-fee-bps`. The starting account holds both the quote asset (`--capital`) and the base asset, so P&L includes the price move on the base holding.
+**How orders fill.** The simulator is one file, [`replay.py`](src/backtest2live/replay.py), and it is deliberately naive:
+
+- The order book is one level each side, `--spread-bps` wide around the candle close.
+- A market order, or a limit that crosses the book, fills at once at the far touch plus `--slippage-bps`, and pays the taker fee.
+- A limit or post-only order that does not cross rests. It fills in full, at its own price, on the first later candle whose low (buy) or high (sell) reaches it, and pays the maker fee.
+- Stop orders, brackets, replaces and stop amendments are not simulated. The report counts them.
+- The risk limits in the config are not enforced.
+
+**What the result means.** A resting order has no queue in front of it and never fills in part. That is the optimistic end of the fill band, so the fill rate and the P&L are upper bounds. Fees default to 10 bps taker and 8 bps maker; set yours with `--taker-fee-bps` and `--maker-fee-bps`. The account starts with `--capital` in the quote asset and nothing else; P&L is the cash flow of the fills plus the open position at the last close.
 
 It runs on your machine. The only network calls are the public candle downloads; nothing is sent to us. Exit code: 0 the backtest ran, 3 it did not.
 
@@ -355,7 +363,7 @@ IS→OOS rank stability (Spearman): 0.99 (threshold > 0.60 ✓)
 
 ## Limitations
 
-- **Not a backtester.** It analyzes results you already have; it does not run strategies.
+- **Not a full backtester.** The checks analyze results you already have. `run` is a naive candle replay for strategies written against the published contract; it has no queue, no partial fills and no stop orders.
 - **Not a live monitor.** Research-phase tooling — live trading needs different rails.
 - **Metric-agnostic, not metric-smart.** It checks dispersion of whatever metric you point at; it doesn't know whether that metric is the right one.
 - **Convergence ≠ profit.** Convergent variants can converge on losing strategies. The verdict reports convergence, not edge.

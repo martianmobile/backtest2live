@@ -1,12 +1,15 @@
+"""The `bt2live run` command line. These tests need no extra and run on every supported Python."""
+
 import importlib.util
 import sys
 import types
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from backtest2live import cli, run
 
-HAS_RUNNER = sys.version_info >= (3, 12) and importlib.util.find_spec("trading_engine_backtest") is not None
+HAS_EXTRA = sys.version_info >= (3, 12) and importlib.util.find_spec("trading_engine_interface") is not None
 
 
 def parse(*argv):
@@ -25,22 +28,23 @@ class Registry:
         return self._entries
 
 
-def test_arguments_map_onto_the_runner_command_line():
-    args = parse("my_pkg", "--pair", "BTC-USDT,ETH-USDT", "--venue", "binance", "--from", "2026-01-01",
-                 "--to", "2026-01-02", "--capital", "5000", "--taker-fee-bps", "4", "--maker-fee-bps", "-1",
-                 "--set", "quantity=2", "--set", "flag=true", "--export-orders", "orders.json", "--verbose")
-    assert run._runner_argv(args, "MyStrategy")[1:] == [
-        "--strategy", "MyStrategy", "--symbols", "BTC-USDT,ETH-USDT", "--kline-venue", "BINANCE",
-        "--capital", "5000.0", "--taker-fee", "4", "--maker-fee", "-1", "--slippage", "5", "--spread", "10",
-        "--run-interval", "5.0", "--start", "2026-01-01", "--end", "2026-01-02",
-        "--set", "quantity=2", "--set", "flag=true", "--export-orders", "orders.json", "--verbose",
-    ]
-
-
 def test_fee_defaults_are_retail_not_zero():
-    argv = run._runner_argv(parse("my_pkg", "--pair", "BTC-USDT", "--days", "3"), "S")
-    assert argv[argv.index("--taker-fee") + 1] == "10" and argv[argv.index("--maker-fee") + 1] == "8"
-    assert argv[argv.index("--days") + 1] == "3" and "--start" not in argv
+    args = parse("my_pkg", "--pair", "BTC-USDT", "--days", "3")
+    assert (args.taker_fee_bps, args.maker_fee_bps, args.slippage_bps, args.spread_bps) == (10, 8, 5, 10)
+    assert args.venue == "okx" and args.capital == "100000"
+
+
+def test_window_from_days_ends_now_and_from_dates_is_utc():
+    start, end = run._window(parse("my_pkg", "--pair", "BTC-USDT", "--days", "3"))
+    assert end - start == timedelta(days=3) and datetime.now(timezone.utc) - end < timedelta(minutes=2)
+    window = run._window(parse("my_pkg", "--pair", "BTC-USDT", "--from", "2026-01-01", "--to", "2026-01-02 06:30"))
+    assert window == (datetime(2026, 1, 1, tzinfo=timezone.utc), datetime(2026, 1, 2, 6, 30, tzinfo=timezone.utc))
+
+
+def test_set_values_are_parsed_as_json_with_bare_words_as_strings():
+    assert run._overrides(["quantity=2", "flag=true", "name=fast", "levels=[1, 2]"]) == {
+        "quantity": 2, "flag": True, "name": "fast", "levels": [1, 2],
+    }
 
 
 def test_strategy_is_picked_from_the_named_package_only():
@@ -62,11 +66,16 @@ def test_strategy_pick_errors_say_what_to_do(entries, wanted, message):
 
 
 @pytest.mark.parametrize("argv,message", [
-    (["my_pkg", "--pair", "BTC-USDT", "--from", "2026-01-01"], "--from needs --to"),
-    (["my_pkg", "--pair", "BTC-USDT", "--days", "0"], "--days must be at least 1"),
+    (["--from", "2026-01-01"], "--from needs --to"),
+    (["--from", "2026-01-02", "--to", "2026-01-01"], "--to must be after --from"),
+    (["--from", "yesterday", "--to", "2026-01-01"], "--from 'yesterday' is not a date"),
+    (["--days", "0"], "--days must be at least 1"),
+    (["--days", "1", "--set", "quantity"], "--set 'quantity' is not KEY=VALUE"),
+    (["--days", "1", "--capital", "lots"], "--capital 'lots' is not a number"),
+    (["--days", "1", "--capital", "0"], "--capital must be positive"),
 ])
-def test_bad_window_is_an_error_not_a_verdict(capsys, argv, message):
-    assert cli.main(["run", *argv]) == cli.EXIT_ERROR
+def test_bad_arguments_are_an_error_not_a_verdict(capsys, argv, message):
+    assert cli.main(["run", "my_pkg", "--pair", "BTC-USDT", *argv]) == cli.EXIT_ERROR
     assert message in capsys.readouterr().err
 
 
@@ -86,7 +95,7 @@ def test_unknown_package_is_named_in_the_error(tmp_path, capsys):
         assert "needs Python 3.12+" in err
 
 
-@pytest.mark.skipif(HAS_RUNNER, reason="the run extra is installed")
+@pytest.mark.skipif(HAS_EXTRA, reason="the run extra is installed")
 def test_without_the_extra_the_command_says_how_to_install_it(tmp_path, capsys):
     (tmp_path / "plain_mod_for_run.py").write_text("x = 1\n", encoding="utf-8")
     rc = cli.main(["run", "plain_mod_for_run", "--path", str(tmp_path), "--pair", "BTC-USDT", "--days", "1"])
@@ -94,30 +103,8 @@ def test_without_the_extra_the_command_says_how_to_install_it(tmp_path, capsys):
     assert "pip install 'backtest2live[run]'" in capsys.readouterr().err
 
 
-def test_a_run_that_does_not_complete_is_an_error(monkeypatch, capsys):
-    registry = Registry(entry("Mine", "my_pkg"))
-    for report, code in (("Status: COMPLETED\n", 0), ("Status: FAILED\nError: boom\n", cli.EXIT_ERROR)):
-        runner = types.SimpleNamespace(main=lambda report=report: print(report, end=""))
-        monkeypatch.setattr(run, "_load_runner", lambda package, path: (runner, registry))
-        assert cli.main(["run", "my_pkg", "--pair", "BTC-USDT", "--days", "1"]) == code
-        captured = capsys.readouterr()
-        assert report in captured.out
-        assert ("optimistic end" in captured.out) == (code == 0)
-
-
-def test_a_runner_that_exits_is_an_error_not_a_verdict(monkeypatch, capsys):
-    def exits():
-        print("Unknown config field(s)")
-        sys.exit(1)
-
-    monkeypatch.setattr(run, "_load_runner",
-                        lambda package, path: (types.SimpleNamespace(main=exits), Registry(entry("Mine", "my_pkg"))))
-    assert cli.main(["run", "my_pkg", "--pair", "BTC-USDT", "--days", "1"]) == cli.EXIT_ERROR
-    assert "did not start" in capsys.readouterr().err
-
-
-@pytest.mark.skipif(not HAS_RUNNER, reason="needs Python 3.12+ and the run extra")
-def test_with_the_extra_a_strategy_outside_any_repo_is_found_and_configured(tmp_path):
+@pytest.mark.skipif(not HAS_EXTRA, reason="needs Python 3.12+ and the run extra")
+def test_with_the_extra_a_strategy_outside_any_repo_is_found(tmp_path):
     (tmp_path / "bt2live_run_fixture.py").write_text(
         "from trading_engine_interface import BaseStrategyConfig\n"
         "from trading_engine_interface.runtime import register_strategy\n\n\n"
@@ -125,12 +112,13 @@ def test_with_the_extra_a_strategy_outside_any_repo_is_found_and_configured(tmp_
         "@register_strategy(config=Settings)\nclass FixtureStrategy:\n    VERSION: int = 1\n",
         encoding="utf-8",
     )
-    runner, registry = run._load_runner("bt2live_run_fixture", str(tmp_path))
+    replay, registry = run._load("bt2live_run_fixture", str(tmp_path))
     try:
         assert run._pick_strategy(registry, "bt2live_run_fixture", None) == "FixtureStrategy"
         from trading_engine_interface import Symbol
 
-        config = runner._load_strategy_config("FixtureStrategy", [Symbol.BTC_USDT])
+        # Settings declares neither class_type nor position, so the runner supplies both.
+        config = replay.build_config(registry, "FixtureStrategy", [Symbol.BTC_USDT], 1000, 5.0, {})
         assert type(config).__name__ == "Settings" and config.class_type == "FixtureStrategy"
     finally:
         registry.unregister("FixtureStrategy")
