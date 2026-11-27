@@ -494,10 +494,12 @@ def _lookback(config: BaseStrategyConfig) -> int:
 
 
 def download(source: str, config: BaseStrategyConfig, start: datetime, end: datetime) -> dict[Symbol, dict[TimeInterval, list[Kline]]]:
-    """Every candle series the config asks for, with enough history before `start` to fill its lookback."""
-    intervals, lookback = _intervals(config), _lookback(config)
-    history_start = start - lookback * intervals[0].timedelta
-    return {s: {i: fetch_candles(source, s, i, history_start, end) for i in intervals} for s in config.symbols}
+    """Every candle series the config asks for, each with enough history before `start` to fill its lookback."""
+    lookback = _lookback(config)
+    return {
+        s: {i: fetch_candles(source, s, i, start - lookback * i.timedelta, end) for i in _intervals(config)}
+        for s in config.symbols
+    }
 
 
 # --- report ----------------------------------------------------------------- #

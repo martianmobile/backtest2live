@@ -225,6 +225,17 @@ def test_okx_pages_are_walked_backwards_and_returned_oldest_first(monkeypatch):
     assert (got[0].low, got[0].high, got[0].close, got[0].quote_volume) == (Decimal("0.5"), 2, Decimal("1.5"), 15)
 
 
+def test_each_interval_is_downloaded_with_its_own_lookback(monkeypatch):
+    config = replay.build_config(Registry(), "Scripted", [BTC], Decimal(1000), 5.0, {})
+    hour = TimeInterval("1h")
+    monkeypatch.setattr(replay, "_intervals", lambda c: [TimeInterval.MIN_5, hour])
+    asked = {}
+    monkeypatch.setattr(replay, "fetch_candles", lambda source, s, i, start, end: asked.setdefault(i, start) and [])
+    replay.download("okx", config, T0, T0 + FIVE)
+    # 200 candles of history each: 200 five-minute candles, and 200 hours for the hourly series.
+    assert asked == {TimeInterval.MIN_5: T0 - 200 * FIVE, hour: T0 - timedelta(hours=200)}
+
+
 def test_binance_pages_are_walked_forwards(monkeypatch):
     start_ms = int(T0.timestamp() * 1000)
     rows = [[start_ms + i * 300_000, "1", "2", "0.5", "1.5", "10", 0, "15", 7] for i in range(1200)]
