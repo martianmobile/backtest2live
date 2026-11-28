@@ -1,3 +1,10 @@
+# [0.11.0](https://github.com/martianmobile/backtest2live/compare/v0.10.0...v0.11.0) (2026-11-28)
+
+
+### Features
+
+* bt2live run, a local candle-replay backtest for a strategy written against trading-engine-interface ([#43](https://github.com/martianmobile/backtest2live/issues/43)) ([ea96c16](https://github.com/martianmobile/backtest2live/commit/ea96c166ed0891b4cf03f295ecd17edc889e53e4)), closes [#15](https://github.com/martianmobile/backtest2live/issues/15) [#15](https://github.com/martianmobile/backtest2live/issues/15) [#15](https://github.com/martianmobile/backtest2live/issues/15) [martianmobile/inf-trading-engine#981](https://github.com/martianmobile/inf-trading-engine/issues/981)
+
 # [0.10.0](https://github.com/martianmobile/backtest2live/compare/v0.9.0...v0.10.0) (2026-10-25)
 
 
