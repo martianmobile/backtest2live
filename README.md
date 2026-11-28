@@ -32,6 +32,7 @@ Each evaluator below checks one of these on your own files: `fill-gap` re-runs y
 | **`bt2live import`** | new | Convert an engine's export (NautilusTrader, LEAN, backtrader, vectorbt, freqtrade, Hummingbot) into the order log the checks read. |
 | **`bt2live tearsheet`** | new | One shareable performance sheet (Markdown, HTML, JSON) whose header says where the numbers came from: **backtest** or **self-reported live**. |
 | **`bt2live preflight`** | new | Every check above in one report: out-of-sample, execution realism, capacity, risk, each **pass / warn / fail / not run**. |
+| **`bt2live run`** | new | Backtest a strategy written against the published [strategy contract](https://pypi.org/project/trading-engine-interface/) on public candles, locally. Fills are the optimistic end of the band. Python 3.12+. |
 
 Roadmap: [ROADMAP.md](ROADMAP.md) and the [milestones](https://github.com/martianmobile/backtest2live/milestones).
 
@@ -47,6 +48,12 @@ The core has no runtime dependencies (Python 3.9+). `fill-gap` needs numpy and p
 
 ```bash
 pip install 'backtest2live[data]'
+```
+
+`run` needs Python 3.12 or later and the strategy contract:
+
+```bash
+pip install 'backtest2live[run]'
 ```
 
 **Claude Code plugin.** This repo is also a plugin marketplace. From inside Claude Code:
@@ -114,6 +121,37 @@ A trade list holds fills only: every row is filled, so it feeds cost-gap and has
 fill-gap skips the market rows and cost-gap the resting ones, so one file serves both. Any CSV with these columns works, whatever wrote it.
 
 **Results schema** (what `convergence` reads): one row per variant, an id column (`variant_id`), one column per swept parameter, metric columns with `_is`/`_oos` suffixes for in-sample and out-of-sample (`sharpe_is`, `sharpe_oos`), and a sample count (`n_trades`). See [`convergence`](#convergence-has-your-variant-sweep-converged) below.
+
+---
+
+## `run`: backtest a strategy written against the published contract
+
+The checks above read a backtest you already have. `run` gives you the backtest, for a strategy written against [`trading-engine-interface`](https://pypi.org/project/trading-engine-interface/), the same contract the Martian Mobile trading engine runs.
+
+```bash
+pip install 'backtest2live[run]'
+bt2live run trading_engine_interface.examples.touch_bid_strategy --pair BTC-USDT --days 1
+```
+
+That runs the example installed with the contract. For your own strategy, name the package or module that registers it:
+
+```bash
+bt2live run my_strategy --pair BTC-USDT --from 2026-11-01 --to 2026-11-08
+```
+
+`my_strategy` is found in the current directory (or `--path`). It registers one class with `@register_strategy(config=YourConfig)`; the contract's README shows the smallest complete one. `run` builds the config from the pair and the limits, constructs the strategy once, and calls `decide()` at each candle close of the exchange you name with `--venue` (`okx` by default, or `binance`). `--set quantity=0.01` overrides a config field, `--export-orders orders.json` writes every order and what happened to it, and `--verbose` shows why `decide()` returned no orders.
+
+**How orders fill.** The simulator is one file, [`replay.py`](src/backtest2live/replay.py), and it is deliberately naive:
+
+- The order book is one level each side, `--spread-bps` wide around the candle close.
+- A market order, or a limit that crosses the book, fills at once at the far touch plus `--slippage-bps`, and pays the taker fee.
+- A limit or post-only order that does not cross rests. It fills in full, at its own price, on the first later candle whose low (buy) or high (sell) reaches it, and pays the maker fee.
+- Stop orders, brackets, replaces and stop amendments are not simulated. The report counts them.
+- The risk limits in the config are not enforced.
+
+**What the result means.** A resting order has no queue in front of it and never fills in part. That is the optimistic end of the fill band, so the fill rate and the P&L are upper bounds. Fees default to 10 bps taker and 8 bps maker; set yours with `--taker-fee-bps` and `--maker-fee-bps`. The account starts with `--capital` in the quote asset and nothing else; P&L is the cash flow of the fills plus the open position at the last close.
+
+It runs on your machine. The only network calls are the public candle downloads; nothing is sent to us. Exit code: 0 the backtest ran, 3 it did not.
 
 ---
 
@@ -325,7 +363,7 @@ IS→OOS rank stability (Spearman): 0.99 (threshold > 0.60 ✓)
 
 ## Limitations
 
-- **Not a backtester.** It analyzes results you already have; it does not run strategies.
+- **Not a full backtester.** The checks analyze results you already have. `run` is a naive candle replay for strategies written against the published contract; it has no queue, no partial fills and no stop orders.
 - **Not a live monitor.** Research-phase tooling — live trading needs different rails.
 - **Metric-agnostic, not metric-smart.** It checks dispersion of whatever metric you point at; it doesn't know whether that metric is the right one.
 - **Convergence ≠ profit.** Convergent variants can converge on losing strategies. The verdict reports convergence, not edge.
